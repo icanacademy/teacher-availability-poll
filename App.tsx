@@ -342,6 +342,7 @@ const App: React.FC = () => {
   // New AI commute summary state
   const [commuteSummary, setCommuteSummary] = useState<string | null>(null);
   const [isCommuteSummaryLoading, setIsCommuteSummaryLoading] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -473,6 +474,11 @@ const App: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    // Prevent duplicate submissions
+    if (isSubmitting) {
+      return;
+    }
+
     if (!selectedTeacherId) {
         setError("Please select your name before submitting your status.");
         return;
@@ -493,7 +499,9 @@ const App: React.FC = () => {
         setError("Please specify your custom reason.");
         return;
     }
+
     setError(null);
+    setIsSubmitting(true);
 
     // Use fake weather data if actual weather fetch failed (e.g., API quota exceeded)
     const submissionWeatherData = weatherData || fakeWeatherData;
@@ -537,6 +545,9 @@ const App: React.FC = () => {
     } else {
       setError("Failed to save your submission. Please try again.");
     }
+
+    // Re-enable submit button
+    setIsSubmitting(false);
   };
   
   const pollCounts: PollCounts = useMemo(() => {
@@ -1016,10 +1027,10 @@ const App: React.FC = () => {
                 <div className="mt-6">
                     <button
                         onClick={handleSubmit}
-                        disabled={!selectedTeacherId || !selectedStatus || !userCoords || !reason || (reason === 'Other' && !customReason.trim())}
+                        disabled={isSubmitting || !selectedTeacherId || !selectedStatus || !userCoords || !reason || (reason === 'Other' && !customReason.trim())}
                         className="w-full py-4 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-lg rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-amber-400 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                     >
-                        Submit Status
+                        {isSubmitting ? 'Submitting...' : 'Submit Status'}
                     </button>
                     {(!selectedTeacherId || !selectedStatus || !userCoords || !reason || (reason === 'Other' && !customReason.trim())) && (
                         <p className="mt-2 text-sm text-amber-600 dark:text-amber-400 text-center">
