@@ -291,11 +291,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
   };
 
 
-  const handleClearAllData = () => {
-    if (window.confirm('Are you sure you want to clear all submission data? This action cannot be undone.')) {
-      setSubmissions([]);
-      localStorage.removeItem('teacher_poll_submissions');
-      setOverallSummary(null);
+  const handleClearAllData = async () => {
+    if (window.confirm('⚠️ WARNING: This will PERMANENTLY DELETE all submissions from the Notion database. This action CANNOT be undone. Are you absolutely sure?')) {
+      try {
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_BASE_URL}/api/submissions`, {
+          method: 'DELETE'
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert(`Failed to delete submissions: ${errorData.error}`);
+          return;
+        }
+
+        const result = await response.json();
+        console.log(`Successfully deleted ${result.deletedCount} submissions`);
+
+        // Clear local state
+        setSubmissions([]);
+        localStorage.removeItem('teacher_poll_submissions');
+        setOverallSummary(null);
+
+        alert(`Successfully deleted ${result.deletedCount} submissions from Notion database.`);
+      } catch (error) {
+        console.error('Error deleting submissions:', error);
+        alert('Failed to delete submissions. Please try again.');
+      }
     }
   };
 

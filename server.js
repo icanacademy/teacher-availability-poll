@@ -313,6 +313,82 @@ app.get('/api/submissions', async (req, res) => {
   }
 });
 
+// Endpoint to delete ALL submissions from Notion (DESTRUCTIVE!)
+app.delete('/api/submissions', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_SUBMISSIONS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials'
+      });
+    }
+
+    // Fetch all submissions
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Notion API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `Notion API error: ${response.status}`,
+        details: errorText
+      });
+    }
+
+    const data = await response.json();
+    let deletedCount = 0;
+    let failedCount = 0;
+
+    // Archive (delete) each submission
+    for (const page of data.results) {
+      const deleteResponse = await fetch(`https://api.notion.com/v1/pages/${page.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          archived: true  // Notion doesn't have delete, only archive
+        })
+      });
+
+      if (deleteResponse.ok) {
+        deletedCount++;
+        console.log(`🗑️  Archived submission ${page.id}`);
+      } else {
+        failedCount++;
+        const errorText = await deleteResponse.text();
+        console.error(`❌ Failed to archive submission ${page.id}:`, errorText);
+      }
+    }
+
+    console.log(`✅ Deletion complete: ${deletedCount} archived, ${failedCount} failed`);
+    res.json({
+      success: true,
+      deletedCount,
+      failedCount,
+      totalProcessed: data.results.length
+    });
+  } catch (error) {
+    console.error('Error deleting submissions:', error);
+    res.status(500).json({
+      error: 'Failed to delete submissions',
+      details: error.message
+    });
+  }
+});
+
 // Migration endpoint to fix old submissions
 app.post('/api/migrate-submissions', async (req, res) => {
   try {
