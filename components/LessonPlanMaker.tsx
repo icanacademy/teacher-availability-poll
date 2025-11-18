@@ -131,34 +131,64 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     const latestSubmissions = new Map<string, PollSubmission>();
     const today = new Date().toISOString().split('T')[0];
 
-    submissions
+    console.log(`\n🔍 Debug for shift ${shift.label}:`);
+    console.log(`📅 Today's date: ${today}`);
+    console.log(`📊 Total submissions: ${submissions.length}`);
+
+    const todaySubmissions = submissions
       .filter(sub => {
         // Handle both string and Date timestamp formats
         const timestampStr = typeof sub.timestamp === 'string'
           ? sub.timestamp
           : new Date(sub.timestamp).toISOString();
-        return timestampStr.startsWith(today);
-      })
-      .forEach(sub => {
-        const existing = latestSubmissions.get(sub.teacherId);
-        if (!existing || sub.timestamp > existing.timestamp) {
-          latestSubmissions.set(sub.teacherId, sub);
+        const matches = timestampStr.startsWith(today);
+        if (!matches) {
+          console.log(`  ❌ Submission from ${sub.teacherName} (${sub.teacherId}) - timestamp ${timestampStr} doesn't match today`);
         }
+        return matches;
       });
+
+    console.log(`✅ Submissions matching today: ${todaySubmissions.length}`);
+
+    todaySubmissions.forEach(sub => {
+      const existing = latestSubmissions.get(sub.teacherId);
+      if (!existing || sub.timestamp > existing.timestamp) {
+        latestSubmissions.set(sub.teacherId, sub);
+        console.log(`  ✓ ${sub.teacherName} (${sub.teacherId}) - Status: ${sub.status}`);
+      }
+    });
+
+    console.log(`\n🎯 Filtering ${teacherSchedules.length} teachers for shift ${shift.label}:`);
 
     return teacherSchedules.filter(teacher => {
       // Check if teacher submitted today and is Available, Late, or Online Only
       const submission = latestSubmissions.get(teacher.id);
-      if (!submission) return false;
-      if (!['Available', 'Late', 'Online Only'].includes(submission.status)) return false;
+      if (!submission) {
+        console.log(`  ❌ ${teacher.name} (${teacher.id}) - No submission today`);
+        return false;
+      }
+
+      if (!['Available', 'Late', 'Online Only'].includes(submission.status)) {
+        console.log(`  ❌ ${teacher.name} - Has submission but status is "${submission.status}"`);
+        return false;
+      }
 
       // Check if teacher's schedule overlaps with this shift
       const teacherStart = parseTime(teacher.startTime);
       const teacherEnd = parseTime(teacher.endTime);
 
-      if (teacherStart === null || teacherEnd === null) return false;
+      console.log(`  🔍 ${teacher.name} - Schedule: "${teacher.startTime}" to "${teacher.endTime}"`);
+      console.log(`     Parsed: ${teacherStart} to ${teacherEnd} (shift: ${shift.start} to ${shift.end})`);
 
-      return timesOverlap(teacherStart, teacherEnd, shift.start, shift.end);
+      if (teacherStart === null || teacherEnd === null) {
+        console.log(`     ❌ Failed to parse time`);
+        return false;
+      }
+
+      const overlaps = timesOverlap(teacherStart, teacherEnd, shift.start, shift.end);
+      console.log(`     ${overlaps ? '✅' : '❌'} Time overlap: ${overlaps}`);
+
+      return overlaps;
     });
   };
 
