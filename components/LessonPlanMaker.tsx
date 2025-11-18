@@ -22,6 +22,7 @@ interface ClassAssignment {
   students: Student[];
   shift: string;
   gradesMixed: string[];
+  teacherStatus: string; // Teacher's availability status (Available, Late, Online Only)
 }
 
 interface LessonPlanMakerProps {
@@ -125,8 +126,8 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     return start1 < end2 && start2 < end1;
   };
 
-  // Get available teachers for a shift
-  const getAvailableTeachers = (shift: typeof TIME_SHIFTS[0]): TeacherSchedule[] => {
+  // Get available teachers for a shift with their status
+  const getAvailableTeachers = (shift: typeof TIME_SHIFTS[0]): Array<{teacher: TeacherSchedule, status: string}> => {
     // Get today's latest submissions (deduplicated)
     const latestSubmissions = new Map<string, PollSubmission>();
     const today = new Date().toISOString().split('T')[0];
@@ -160,12 +161,14 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
     console.log(`\n🎯 Filtering ${teacherSchedules.length} teachers for shift ${shift.label}:`);
 
-    return teacherSchedules.filter(teacher => {
+    const availableTeachersWithStatus: Array<{teacher: TeacherSchedule, status: string}> = [];
+
+    teacherSchedules.forEach(teacher => {
       // Check if teacher submitted today and is Available, Late, or Online Only
       const submission = latestSubmissions.get(teacher.id);
       if (!submission) {
         console.log(`  ❌ ${teacher.name} (${teacher.id}) - No submission today`);
-        return false;
+        return;
       }
 
       // Check status - handle both formats (e.g., "Available" and "AVAILABLE")
@@ -174,7 +177,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
       if (!allowedStatuses.includes(normalizedStatus)) {
         console.log(`  ❌ ${teacher.name} - Has submission but status is "${submission.status}" (normalized: "${normalizedStatus}")`);
-        return false;
+        return;
       }
 
       // Check if teacher's schedule overlaps with this shift
@@ -186,14 +189,18 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
       if (teacherStart === null || teacherEnd === null) {
         console.log(`     ❌ Failed to parse time`);
-        return false;
+        return;
       }
 
       const overlaps = timesOverlap(teacherStart, teacherEnd, shift.start, shift.end);
-      console.log(`     ${overlaps ? '✅' : '❌'} Time overlap: ${overlaps}`);
+      console.log(`     ${overlaps ? '✅' : '❌'} Time overlap: ${overlaps} - Status: ${submission.status}`);
 
-      return overlaps;
+      if (overlaps) {
+        availableTeachersWithStatus.push({ teacher, status: submission.status });
+      }
     });
+
+    return availableTeachersWithStatus;
   };
 
   // Get available students for a shift
@@ -298,10 +305,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           const classStudents = students.splice(0, classSize);
 
           classes.push({
-            teacher: availableTeachers[teacherIndex],
+            teacher: availableTeachers[teacherIndex].teacher,
             students: classStudents,
             shift: shift.label,
             gradesMixed: [grade],
+            teacherStatus: availableTeachers[teacherIndex].status,
           });
 
           teacherIndex++;
@@ -328,10 +336,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
         if (classStudents.length > 0) {
           classes.push({
-            teacher: availableTeachers[teacherIndex],
+            teacher: availableTeachers[teacherIndex].teacher,
             students: classStudents,
             shift: shift.label,
             gradesMixed: gradesInClass.sort(),
+            teacherStatus: availableTeachers[teacherIndex].status,
           });
           teacherIndex++;
         } else {
@@ -364,7 +373,8 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       if (classes.length > 0) {
         console.log(`  ✅ Class assignments:`);
         classes.forEach((cls, idx) => {
-          console.log(`    Class ${idx + 1} - Teacher: ${cls.teacher.name}`);
+          const statusEmoji = cls.teacherStatus.toUpperCase().includes('ONLINE') ? '💻' : '🏫';
+          console.log(`    Class ${idx + 1} - Teacher: ${cls.teacher.name} ${statusEmoji} [${cls.teacherStatus}]`);
           console.log(`      Students (${cls.students.length}):`);
           cls.students.forEach(s => console.log(`        - ${s.name}`));
         });
@@ -515,8 +525,18 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                       <h4 className="text-md font-semibold text-slate-900 dark:text-white">
                         Class {index + 1}
                       </h4>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
                         Teacher: <span className="font-medium">{classItem.teacher.name}</span>
+                        {classItem.teacherStatus.toUpperCase().includes('ONLINE') && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                            💻 Online Only
+                          </span>
+                        )}
+                        {classItem.teacherStatus.toUpperCase().includes('LATE') && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            ⏰ Late
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-500">
                         Grades: {classItem.gradesMixed.join(', ')}
