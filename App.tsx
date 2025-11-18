@@ -560,10 +560,25 @@ const App: React.FC = () => {
         [PollStatus.UNAVAILABLE]: 0,
         [PollStatus.EMERGENCY]: 0,
     };
-    
+
+    // Filter submissions to only include today's submissions
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todaysSubmissions = submissions.filter(sub => {
+      const subDate = new Date(sub.timestamp);
+      return subDate >= today && subDate < tomorrow;
+    });
+
+    // Get latest submission per teacher (from today only)
     const latestSubmissions = new Map<string, PollSubmission>();
-    submissions.forEach(sub => {
-        latestSubmissions.set(sub.teacherId, sub);
+    todaysSubmissions.forEach(sub => {
+        const existing = latestSubmissions.get(sub.teacherId);
+        if (!existing || sub.timestamp > existing.timestamp) {
+            latestSubmissions.set(sub.teacherId, sub);
+        }
     });
 
     latestSubmissions.forEach(sub => {
@@ -574,9 +589,24 @@ const App: React.FC = () => {
   }, [submissions]);
 
   const teacherLocations: Location[] = useMemo(() => {
+     // Filter submissions to only include today's submissions
+     const now = new Date();
+     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+     const tomorrow = new Date(today);
+     tomorrow.setDate(tomorrow.getDate() + 1);
+
+     const todaysSubmissions = submissions.filter(sub => {
+       const subDate = new Date(sub.timestamp);
+       return subDate >= today && subDate < tomorrow;
+     });
+
+     // Get latest submission per teacher (from today only)
      const latestSubmissions = new Map<string, PollSubmission>();
-     submissions.forEach(sub => {
-         latestSubmissions.set(sub.teacherId, sub);
+     todaysSubmissions.forEach(sub => {
+         const existing = latestSubmissions.get(sub.teacherId);
+         if (!existing || sub.timestamp > existing.timestamp) {
+             latestSubmissions.set(sub.teacherId, sub);
+         }
      });
 
      const locations: Location[] = [];
