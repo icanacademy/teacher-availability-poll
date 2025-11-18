@@ -48,14 +48,48 @@ export const POLL_OPTIONS: PollOption[] = [
 ];
 
 export const REASON_OPTIONS = [
+    // Leave & Appointments
+    'Official Leave',
+    'Sick Leave',
+    'Medical Appointment',
+    'Family Emergency',
+    'Personal Matter',
+
+    // Weather-related
     'Flooding',
     'Extreme Rain',
+    'Typhoon/Storm',
     'Extreme Wind',
+
+    // Infrastructure Issues
     'Power Outage',
     'Internet Outage',
+    'No Internet Connection',
     'Earthquake-related Issues',
+
+    // Transportation
     'Transportation Issues',
-    'Personal/Home Emergency',
+    'Traffic/Road Closure',
+    'Vehicle Breakdown',
+    'No Available Transport',
+    'Flight/Travel Delay',
+
+    // Health
     'Feeling Unwell',
+    'COVID-19 Related',
+    'Self-Quarantine',
+
+    // Home/Family
+    'Childcare Issues',
+    'Elder Care',
+    'Home Emergency',
+    'House Repair/Maintenance',
+
+    // Work-related
+    'Training/Seminar',
+    'School Event',
+    'Meeting Conflict',
+
+    // Other
     'Other',
 ];
