@@ -5,6 +5,7 @@ import { EyeIcon, ExternalLinkIcon, SparklesIcon } from './icons';
 import WeatherBanner from './WeatherBanner';
 import { analyzeImage, analyzeVideo, summarizeSubmissions } from '../services/geminiService';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LessonPlanMaker } from './LessonPlanMaker';
 
 
 interface AdminDashboardProps {
@@ -750,13 +751,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
         </table>
       </div>
       {selectedSubmission && (
-          <SubmissionDetailsModal 
+          <SubmissionDetailsModal
               submission={selectedSubmission}
               teacherName={teacherMap.get(selectedSubmission.teacherId) || 'Unknown Teacher'}
               onClose={() => setSelectedSubmission(null)}
               onUpdateSubmission={handleUpdateSubmission}
           />
       )}
+
+      {/* Lesson Plan Maker - Add at the bottom */}
+      <div className="mt-8">
+        <LessonPlanMaker submissions={displaySubmissions} teachers={teachers} />
+      </div>
     </div>
   );
 };
