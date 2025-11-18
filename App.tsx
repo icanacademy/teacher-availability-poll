@@ -10,8 +10,7 @@ import { fetchTeachersFromNotion } from './services/notionService';
 import { POLL_OPTIONS, REASON_OPTIONS } from './constants';
 import { PollStatus } from './types';
 import type { WeatherData, PollCounts, Location, Teacher, PollSubmission } from './types';
-import { PHILIPPINE_CITIES } from './data/philippineCities';
-import { findInternationalCity } from './data/internationalCities';
+import { groupLocationsByCategory, findLocationById, findNearestLocation, type LocationOption } from './data/unifiedLocations';
 import { CameraIcon, MessageSquareIcon, VideoIcon, XIcon } from './components/icons';
 
 // --- LOCATION UTILITIES ---
@@ -28,21 +27,7 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c; // Distance in km
 };
 
-// Find the nearest Philippine city from GPS coordinates
-const findNearestCity = (lat: number, lng: number): string => {
-  let nearestCity = PHILIPPINE_CITIES[0];
-  let minDistance = calculateDistance(lat, lng, nearestCity.lat, nearestCity.lng);
-
-  for (const city of PHILIPPINE_CITIES) {
-    const distance = calculateDistance(lat, lng, city.lat, city.lng);
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearestCity = city;
-    }
-  }
-
-  return nearestCity.name;
-};
+// This function is now provided by unifiedLocations.ts as findNearestLocation
 
 // --- START: FAKE DATA GENERATION FOR TESTING ---
 
@@ -328,9 +313,9 @@ const App: React.FC = () => {
   const [userCoords, setUserCoords] = useState<{lat: number, lng: number} | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationMethod, setLocationMethod] = useState<'gps' | 'manual-ph' | 'manual-intl' | null>(null);
-  const [selectedCity, setSelectedCity] = useState<string>('');
-  const [internationalLocation, setInternationalLocation] = useState<string>('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [otherLocation, setOtherLocation] = useState<string>('');
+  const [locationDisplayName, setLocationDisplayName] = useState<string>('');
 
   // New optional fields state
   const [reason, setReason] = useState<string>('');
@@ -409,10 +394,12 @@ const App: React.FC = () => {
         };
         setUserCoords(coords);
 
-        // Auto-fill the dropdown with the nearest city
-        const nearestCityName = findNearestCity(coords.lat, coords.lng);
-        setSelectedCity(nearestCityName);
-        setLocationMethod('manual-ph'); // Changed to manual-ph since we're using the dropdown
+        // Auto-fill the dropdown with the nearest location
+        const nearestLocation = findNearestLocation(coords.lat, coords.lng);
+        if (nearestLocation) {
+          setSelectedLocationId(nearestLocation.id);
+          setLocationDisplayName(nearestLocation.displayName);
+        }
 
         // Fetch weather for the user's actual location
         getWeatherData(coords.lat, coords.lng);
@@ -447,46 +434,50 @@ const App: React.FC = () => {
     );
   };
 
-  const handleManualLocationPH = (cityName: string) => {
-    const city = PHILIPPINE_CITIES.find(c => c.name === cityName);
-    if (city) {
-      setUserCoords({ lat: city.lat, lng: city.lng });
-      setSelectedCity(cityName);
-      setLocationMethod('manual-ph');
+  const handleLocationSelect = (locationId: string) => {
+    if (locationId === 'other') {
+      // User selected "Other" - they'll type in the text field
+      setSelectedLocationId('other');
+      setLocationDisplayName('');
+      setUserCoords(null);
+      setLocationError(null);
+      return;
+    }
+
+    if (!locationId) {
+      // Empty selection
+      setSelectedLocationId('');
+      setLocationDisplayName('');
+      setUserCoords(null);
+      setLocationError(null);
+      return;
+    }
+
+    const location = findLocationById(locationId);
+    if (location) {
+      setUserCoords({ lat: location.lat, lng: location.lng });
+      setSelectedLocationId(locationId);
+      setLocationDisplayName(location.displayName);
+      setOtherLocation('');
       setLocationError(null);
 
-      // Fetch weather for the selected city
-      getWeatherData(city.lat, city.lng);
+      // Fetch weather for the selected location
+      console.log(`📍 Selected location: ${location.displayName} (${location.lat}, ${location.lng})`);
+      getWeatherData(location.lat, location.lng);
     }
   };
 
-  const handleManualLocationIntl = (location: string) => {
-    if (location.trim()) {
-      // Try to find the city in our international cities database
-      const foundCity = findInternationalCity(location);
+  const handleOtherLocationSubmit = () => {
+    if (otherLocation.trim()) {
+      // Use Manila coordinates as default for unknown locations
+      const defaultCoords = { lat: 14.5995, lng: 120.9842 };
+      setUserCoords(defaultCoords);
+      setLocationDisplayName(otherLocation.trim());
+      setLocationError('⚠️ Using default coordinates for unknown location. Weather data may not be accurate.');
 
-      if (foundCity) {
-        // Use the actual city coordinates
-        const cityCoords = { lat: foundCity.lat, lng: foundCity.lng };
-        setUserCoords(cityCoords);
-        setInternationalLocation(`${foundCity.name}, ${foundCity.country}`);
-        setLocationMethod('manual-intl');
-        setLocationError(null);
-
-        // Fetch weather for the actual city location
-        console.log(`📍 Found international city: ${foundCity.name}, ${foundCity.country} (${foundCity.lat}, ${foundCity.lng})`);
-        getWeatherData(cityCoords.lat, cityCoords.lng);
-      } else {
-        // City not found in database - use Manila as fallback
-        const defaultCoords = { lat: 14.5995, lng: 120.9842 };
-        setUserCoords(defaultCoords);
-        setInternationalLocation(location);
-        setLocationMethod('manual-intl');
-        setLocationError('⚠️ City not found in our database. Using Manila weather as fallback. Try typing just the city name (e.g., "Tokyo", "Singapore", "New York")');
-
-        console.log(`⚠️ International city not found: "${location}". Using Manila coordinates as fallback.`);
-        getWeatherData(defaultCoords.lat, defaultCoords.lng);
-      }
+      // Fetch weather for default coordinates
+      console.log(`📍 Other location: ${otherLocation.trim()} (using Manila coordinates as fallback)`);
+      getWeatherData(defaultCoords.lat, defaultCoords.lng);
     }
   };
 
@@ -531,7 +522,7 @@ const App: React.FC = () => {
     const teacherName = teacher?.name || 'Unknown';
 
     // Determine the location name to display
-    const locationName = selectedCity || internationalLocation || 'Unknown Location';
+    const locationName = locationDisplayName || 'Unknown Location';
 
     const newSubmission: PollSubmission = {
         id: `sub_${Date.now()}`,
@@ -671,13 +662,13 @@ const App: React.FC = () => {
       console.log('📦 Using fallback weather data');
 
       // Generate location-aware fake weather data as fallback
-      const locationName = selectedCity || internationalLocation || 'Your Location';
-      const fallbackData = generateFakeWeatherData(locationName);
+      const fallbackLocationName = locationDisplayName || 'Your Location';
+      const fallbackData = generateFakeWeatherData(fallbackLocationName);
       setWeatherData(fallbackData);
     } finally {
       setIsWeatherLoading(false);
     }
-  }, [selectedCity, internationalLocation]);
+  }, [locationDisplayName]);
 
   // Don't automatically request location or fetch weather on page load
   // Teachers will use the "Get Current Location" button or select from dropdown
@@ -846,72 +837,80 @@ const App: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Philippines City Dropdown - Always visible */}
+                  {/* Unified Location Dropdown */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                      📍 Philippine Location:
+                      📍 Select Your Location:
                     </label>
                     <select
-                      value={selectedCity}
-                      onChange={(e) => handleManualLocationPH(e.target.value)}
+                      value={selectedLocationId}
+                      onChange={(e) => handleLocationSelect(e.target.value)}
                       className="block w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-sky-500 focus:border-sky-500 text-sm"
                     >
-                      <option value="">-- Select your city/province --</option>
-                      <optgroup label="Greater Manila Area">
-                        {PHILIPPINE_CITIES.filter(city => !city.isProvince).map(city => (
-                          <option key={city.name} value={city.name}>
-                            {city.name}, {city.region}
-                          </option>
+                      <option value="">-- Select your location --</option>
+
+                      <optgroup label="📍 NCR (Metro Manila)">
+                        {groupLocationsByCategory().NCR.map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.displayName}</option>
                         ))}
                       </optgroup>
-                      <optgroup label="Other Philippine Provinces">
-                        {PHILIPPINE_CITIES.filter(city => city.isProvince).map(city => (
-                          <option key={city.name} value={city.name}>
-                            {city.name}
-                          </option>
+
+                      <optgroup label="🏙️ Greater Manila Area">
+                        {groupLocationsByCategory().GMA.map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.displayName}</option>
                         ))}
                       </optgroup>
+
+                      <optgroup label="🏝️ Other Philippine Provinces">
+                        {groupLocationsByCategory().Provinces.map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.displayName}</option>
+                        ))}
+                      </optgroup>
+
+                      <optgroup label="🌏 International">
+                        {groupLocationsByCategory().International.map(loc => (
+                          <option key={loc.id} value={loc.id}>{loc.displayName}</option>
+                        ))}
+                      </optgroup>
+
+                      <option value="other">✍️ Other (specify below)</option>
                     </select>
                   </div>
 
-                  {/* Divider */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-px bg-slate-300 dark:bg-slate-600"></div>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">OR</span>
-                    <div className="flex-1 h-px bg-slate-300 dark:bg-slate-600"></div>
-                  </div>
-
-                  {/* Manual Location - International */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                      🌏 International Location:
-                    </label>
-                    <input
-                      type="text"
-                      value={internationalLocation}
-                      onChange={(e) => setInternationalLocation(e.target.value)}
-                      onBlur={(e) => handleManualLocationIntl(e.target.value)}
-                      placeholder="e.g., Singapore, Tokyo, New York"
-                      className="block w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-sky-500 focus:border-sky-500 text-sm placeholder-slate-400"
-                    />
-                  </div>
+                  {/* Other Location Text Input - Only visible when "Other" is selected */}
+                  {selectedLocationId === 'other' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                        ✍️ Specify Location:
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={otherLocation}
+                          onChange={(e) => setOtherLocation(e.target.value)}
+                          placeholder="e.g., Remote location, Other city"
+                          className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-sky-500 focus:border-sky-500 text-sm placeholder-slate-400"
+                        />
+                        <button
+                          onClick={handleOtherLocationSubmit}
+                          disabled={!otherLocation.trim()}
+                          className="px-4 py-2 text-sm font-semibold rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Set
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Location Status Display */}
-                  {userCoords && (
+                  {userCoords && locationDisplayName && (
                     <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md">
                       <p className="text-sm text-green-800 dark:text-green-200 font-semibold mb-1">
                         ✓ Location Set:
                       </p>
-                      {selectedCity && (
-                        <p className="text-xs text-green-700 dark:text-green-300">
-                          📍 {selectedCity}
-                        </p>
-                      )}
-                      {internationalLocation && !selectedCity && (
-                        <p className="text-xs text-green-700 dark:text-green-300">
-                          🌏 {internationalLocation}
-                        </p>
-                      )}
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        📍 {locationDisplayName}
+                      </p>
                       <a
                         href={`https://www.google.com/maps?q=${userCoords.lat},${userCoords.lng}`}
                         target="_blank"
