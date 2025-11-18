@@ -2,10 +2,9 @@ import type { Teacher } from '../types';
 
 export const fetchTeachersFromNotion = async (): Promise<Teacher[]> => {
     try {
-        // Use the current host but port 3001 for backend
-        // This way it works both on localhost and network IP
-        const hostname = window.location.hostname;
-        const backendUrl = `http://${hostname}:3001/api/teachers`;
+        // Use environment variable for production, fallback to localhost for development
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const backendUrl = `${API_BASE_URL}/api/teachers`;
 
         const response = await fetch(backendUrl);
 

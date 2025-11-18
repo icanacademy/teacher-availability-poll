@@ -152,8 +152,8 @@ const generateFakeSubmissions = (teachers: Teacher[], weatherData: WeatherData):
 // API helpers for submissions
 const fetchSubmissionsFromBackend = async (): Promise<PollSubmission[]> => {
   try {
-    const hostname = window.location.hostname;
-    const backendUrl = `http://${hostname}:3001/api/submissions`;
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const backendUrl = `${API_BASE_URL}/api/submissions`;
 
     const response = await fetch(backendUrl);
 
@@ -218,8 +218,8 @@ const isCoordinateString = (str: string): boolean => {
 
 const uploadFile = async (base64Data: string, type: 'photo' | 'video'): Promise<string | null> => {
   try {
-    const hostname = window.location.hostname;
-    const backendUrl = `http://${hostname}:3001/api/upload`;
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const backendUrl = `${API_BASE_URL}/api/upload`;
 
     // Convert base64 to blob
     const response = await fetch(base64Data);
@@ -257,7 +257,7 @@ const saveSubmissionToBackend = async (
   videoData: { data: string, mimeType: string } | null
 ): Promise<boolean> => {
   try {
-    const hostname = window.location.hostname;
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
     // Upload photo and video if they exist
     let photoUrl: string | null = null;
@@ -274,7 +274,7 @@ const saveSubmissionToBackend = async (
     }
 
     // Submit to Notion
-    const backendUrl = `http://${hostname}:3001/api/submissions`;
+    const backendUrl = `${API_BASE_URL}/api/submissions`;
     const response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
