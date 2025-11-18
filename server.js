@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 // ES Module fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -15,14 +17,20 @@ dotenv.config({ path: '.env.local' });
 const app = express();
 const PORT = 3001;
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Configure multer with Cloudinary storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'teacher-availability-poll',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mov', 'avi'],
+    resource_type: 'auto', // Automatically detect image vs video
   }
 });
 
@@ -60,9 +68,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Endpoint to fetch teachers from Notion
 app.get('/api/teachers', async (req, res) => {
@@ -143,10 +148,10 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const hostname = req.hostname === 'localhost' ? 'localhost' : req.hostname;
-    const fileUrl = `http://${hostname}:${PORT}/uploads/${req.file.filename}`;
+    // Cloudinary provides the file URL in req.file.path
+    const fileUrl = req.file.path;
 
-    console.log(`✅ File uploaded: ${req.file.filename}`);
+    console.log(`✅ File uploaded to Cloudinary: ${fileUrl}`);
     res.json({
       success: true,
       filename: req.file.filename,

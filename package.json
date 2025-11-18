@@ -13,10 +13,12 @@
   "dependencies": {
     "@google/genai": "^1.29.1",
     "@notionhq/client": "^5.4.0",
+    "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "multer": "^2.0.2",
+    "multer-storage-cloudinary": "^4.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.4.1"
