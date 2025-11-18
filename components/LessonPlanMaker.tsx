@@ -121,9 +121,9 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     return hours + minutes / 60;
   };
 
-  // Check if time ranges overlap
+  // Check if time ranges overlap (inclusive of boundary matches)
   const timesOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
-    return start1 < end2 && start2 < end1;
+    return start1 < end2 && start2 <= end1;
   };
 
   // Get available teachers for a shift with their status
