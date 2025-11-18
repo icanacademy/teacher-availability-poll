@@ -246,6 +246,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     console.log('✅ Attending students:', attendingStudents.size);
     console.log('📝 Total submissions:', submissions.length);
 
+    // Log attending students
+    const attendingStudentsList = allStudents.filter(s => attendingStudents.has(s.id));
+    console.log('\n👨‍🎓 Attending students list:');
+    attendingStudentsList.forEach(s => {
+      console.log(`  - ${s.name} (Grade ${s.grade}): ${s.startTime} to ${s.endTime}`);
+    });
+
     const newPlan = new Map<string, ClassAssignment[]>();
 
     TIME_SHIFTS.forEach(shift => {
@@ -256,6 +263,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       console.log(`\n⏰ Shift ${shift.label}:`);
       console.log(`  Teachers available: ${availableTeachers.length}`);
       console.log(`  Students available: ${availableStudents.length}`);
+
+      if (availableStudents.length > 0) {
+        console.log(`  Students for this shift:`);
+        availableStudents.forEach(s => {
+          console.log(`    - ${s.name} (Grade ${s.grade})`);
+        });
+      }
 
       if (availableTeachers.length === 0 || availableStudents.length === 0) {
         newPlan.set(shift.id, classes);
@@ -326,6 +340,16 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       }
 
       console.log(`  Classes created: ${classes.length}`);
+
+      if (classes.length > 0) {
+        console.log(`  Class assignments:`);
+        classes.forEach((cls, idx) => {
+          console.log(`    Class ${idx + 1} - Teacher: ${cls.teacher.name}`);
+          console.log(`      Students (${cls.students.length}):`);
+          cls.students.forEach(s => console.log(`        - ${s.name}`));
+        });
+      }
+
       newPlan.set(shift.id, classes);
     });
 
