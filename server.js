@@ -556,7 +556,7 @@ app.get('/api/teachers-schedules', async (req, res) => {
   }
 });
 
-// GET /api/students - Fetch students with schedules (Start Time, End Time, Grade, Status)
+// GET /api/students - Fetch ALL students with pagination support
 app.get('/api/students', async (req, res) => {
   try {
     const apiKey = process.env.NOTION_API_KEY;
@@ -568,39 +568,54 @@ app.get('/api/students', async (req, res) => {
       });
     }
 
-    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({})
-    });
+    let allStudents = [];
+    let hasMore = true;
+    let startCursor = undefined;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Notion API error:', response.status, errorText);
-      return res.status(response.status).json({
-        error: `Notion API error: ${response.status}`,
-        details: errorText
+    // Fetch all pages until no more results
+    while (hasMore) {
+      const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          start_cursor: startCursor,
+          page_size: 100
+        })
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Notion API error:', response.status, errorText);
+        return res.status(response.status).json({
+          error: `Notion API error: ${response.status}`,
+          details: errorText
+        });
+      }
+
+      const data = await response.json();
+      const students = data.results.map((page) => {
+        const properties = page.properties;
+        return {
+          id: page.id,
+          name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
+          startTime: properties['Start Time']?.select?.name || '',
+          endTime: properties['End Time']?.select?.name || '',
+          grade: properties['Grade']?.rich_text?.[0]?.plain_text || '',
+          status: properties['Status']?.select?.name || 'Active',
+        };
+      });
+
+      allStudents = allStudents.concat(students);
+      hasMore = data.has_more;
+      startCursor = data.next_cursor;
     }
 
-    const data = await response.json();
-    const students = data.results.map((page) => {
-      const properties = page.properties;
-      return {
-        id: page.id,
-        name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
-        startTime: properties['Start Time']?.select?.name || '',
-        endTime: properties['End Time']?.select?.name || '',
-        grade: properties['Grade']?.rich_text?.[0]?.plain_text || '',
-        status: properties['Status']?.select?.name || 'Active',
-      };
-    });
-
-    res.json(students);
+    console.log(`✅ Successfully loaded ${allStudents.length} students from Notion (${allStudents.filter(s => s.status === 'Active').length} active)`);
+    res.json(allStudents);
   } catch (error) {
     console.error('Error fetching students:', error);
     res.status(500).json({
