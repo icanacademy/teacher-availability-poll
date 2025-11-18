@@ -212,7 +212,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'all'>('all');
   const [customDate, setCustomDate] = useState<string>('');
-  const [showAllSubmissions, setShowAllSubmissions] = useState(false);
+  const [viewMode, setViewMode] = useState<'latest' | 'all' | 'not-submitted'>('latest');
 
   const teacherMap = new Map(teachers.map(t => [t.id, t.name]));
 
@@ -262,10 +262,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
 
   const filteredSubmissions = getFilteredSubmissions();
 
-  // Filter to show only latest submission per teacher (unless showAllSubmissions is true)
+  // Get latest submission per teacher from filtered submissions
   const getLatestSubmissionsPerTeacher = (subs: PollSubmission[]): PollSubmission[] => {
-    if (showAllSubmissions) return subs;
-
     const latestMap = new Map<string, PollSubmission>();
     subs.forEach(sub => {
       const existing = latestMap.get(sub.teacherId);
@@ -276,7 +274,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
     return Array.from(latestMap.values());
   };
 
-  const deduplicatedSubmissions = getLatestSubmissionsPerTeacher(filteredSubmissions);
+  const latestSubmissions = getLatestSubmissionsPerTeacher(filteredSubmissions);
+
+  // Get teachers who haven't submitted
+  const submittedTeacherIds = new Set(latestSubmissions.map(sub => sub.teacherId));
+  const notSubmittedTeachers = teachers.filter(t => !submittedTeacherIds.has(t.id));
+
+  // Determine what to show based on view mode
+  const displaySubmissions = viewMode === 'all'
+    ? filteredSubmissions
+    : viewMode === 'latest'
+    ? latestSubmissions
+    : []; // For 'not-submitted', we'll show teachers differently
+
+  const deduplicatedSubmissions = displaySubmissions;
 
   // Academy location (Pasig City)
   const academyLat = 14.5764;
@@ -429,15 +440,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
           </div>
         </div>
 
-        {/* Toggle for showing all submissions vs latest per teacher */}
+        {/* Toggle for showing all submissions vs latest per teacher vs not submitted */}
         <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Show submissions:</span>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">View:</span>
               <button
-                onClick={() => setShowAllSubmissions(false)}
+                onClick={() => setViewMode('latest')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  !showAllSubmissions
+                  viewMode === 'latest'
                     ? 'bg-sky-600 text-white'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500'
                 }`}
@@ -445,20 +456,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
                 Latest Only
               </button>
               <button
-                onClick={() => setShowAllSubmissions(true)}
+                onClick={() => setViewMode('all')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                  showAllSubmissions
+                  viewMode === 'all'
                     ? 'bg-sky-600 text-white'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500'
                 }`}
               >
                 Full History
               </button>
+              <button
+                onClick={() => setViewMode('not-submitted')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  viewMode === 'not-submitted'
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500'
+                }`}
+              >
+                Not Submitted Yet
+              </button>
             </div>
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-            {showAllSubmissions ? (
+            {viewMode === 'all' ? (
               <>
                 Showing all {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''}
                 {teachersWithMultipleSubmissions > 0 && (
@@ -467,7 +488,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
                   </span>
                 )}
               </>
-            ) : (
+            ) : viewMode === 'latest' ? (
               <>
                 Showing latest submission for {deduplicatedSubmissions.length} teacher{deduplicatedSubmissions.length !== 1 ? 's' : ''}
                 {filteredSubmissions.length !== deduplicatedSubmissions.length && (
@@ -475,6 +496,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
                     {' '}(hiding {filteredSubmissions.length - deduplicatedSubmissions.length} older submission{filteredSubmissions.length - deduplicatedSubmissions.length !== 1 ? 's' : ''})
                   </span>
                 )}
+              </>
+            ) : (
+              <>
+                Showing {notSubmittedTeachers.length} teacher{notSubmittedTeachers.length !== 1 ? 's' : ''} who haven't submitted yet
               </>
             )}
             {customDate && ` for ${new Date(customDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
@@ -486,7 +511,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
         </div>
       </div>
 
-      {/* Analytics Cards */}
+      {/* Analytics Cards - Only show for Latest and Full History views */}
+      {viewMode !== 'not-submitted' && (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-600">
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Total</p>
@@ -607,6 +633,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
           </div>
         </div>
       </div>
+      )}
 
         {summaryError && <p className="text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md mb-4 text-sm">{summaryError}</p>}
         {overallSummary && (
@@ -642,14 +669,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {sortedSubmissions.length > 0 ? sortedSubmissions.map((sub) => {
+            {viewMode === 'not-submitted' ? (
+              notSubmittedTeachers.length > 0 ? notSubmittedTeachers.map((teacher) => (
+                <tr key={teacher.id} className="bg-slate-50 dark:bg-slate-900/50">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {teacher.name}
+                  </td>
+                  <td colSpan={5} className="px-4 py-4 text-sm text-slate-500 dark:text-slate-400 italic">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                      No submission yet
+                    </span>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                    All teachers have submitted! 🎉
+                  </td>
+                </tr>
+              )
+            ) : sortedSubmissions.length > 0 ? sortedSubmissions.map((sub) => {
               const distance = calculateDistance(academyLat, academyLng, sub.coords.lat, sub.coords.lng);
               return (
               <tr key={sub.id}>
                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
                   <div className="flex items-center gap-2">
                     <span>{teacherMap.get(sub.teacherId) || 'Unknown Teacher'}</span>
-                    {showAllSubmissions && (teacherSubmissionCounts.get(sub.teacherId) || 0) > 1 && (
+                    {viewMode === 'all' && (teacherSubmissionCounts.get(sub.teacherId) || 0) > 1 && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                         {teacherSubmissionCounts.get(sub.teacherId)}× submitted
                       </span>
