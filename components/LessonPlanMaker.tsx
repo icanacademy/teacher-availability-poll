@@ -168,8 +168,12 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         return false;
       }
 
-      if (!['Available', 'Late', 'Online Only'].includes(submission.status)) {
-        console.log(`  ❌ ${teacher.name} - Has submission but status is "${submission.status}"`);
+      // Check status - handle both formats (e.g., "Available" and "AVAILABLE")
+      const normalizedStatus = submission.status.toUpperCase().replace(/\s+/g, '_');
+      const allowedStatuses = ['AVAILABLE', 'LATE', 'ONLINE_ONLY'];
+
+      if (!allowedStatuses.includes(normalizedStatus)) {
+        console.log(`  ❌ ${teacher.name} - Has submission but status is "${submission.status}" (normalized: "${normalizedStatus}")`);
         return false;
       }
 
