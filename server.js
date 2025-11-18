@@ -540,12 +540,13 @@ app.get('/api/teachers-schedules', async (req, res) => {
       const properties = page.properties;
       return {
         id: properties['Teacher ID']?.rich_text?.[0]?.plain_text || page.id,
-        name: properties['Name']?.title?.[0]?.plain_text || 'Unknown',
-        startTime: properties['Start Time']?.rich_text?.[0]?.plain_text || '',
-        endTime: properties['End Time']?.rich_text?.[0]?.plain_text || '',
+        name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
+        startTime: properties['Start Time']?.select?.name || '',
+        endTime: properties['End Time']?.select?.name || '',
       };
     });
 
+    console.log(`✅ Successfully loaded ${teachers.length} teachers with schedules from Notion`);
     res.json(teachers);
   } catch (error) {
     console.error('Error fetching teachers schedules:', error);
@@ -643,6 +644,36 @@ app.get('/api/students-debug', async (req, res) => {
 
     const data = await response.json();
     // Return just the first result's properties to see structure
+    if (data.results && data.results.length > 0) {
+      res.json({
+        propertyNames: Object.keys(data.results[0].properties),
+        firstRecord: data.results[0].properties
+      });
+    } else {
+      res.json({ error: 'No records found' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Get raw teacher data from Notion
+app.get('/api/teachers-debug', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_TEACHERS_DB_ID;
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ page_size: 1 })
+    });
+
+    const data = await response.json();
     if (data.results && data.results.length > 0) {
       res.json({
         propertyNames: Object.keys(data.results[0].properties),
