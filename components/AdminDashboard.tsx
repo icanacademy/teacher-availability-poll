@@ -212,6 +212,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'all'>('all');
   const [customDate, setCustomDate] = useState<string>('');
+  const [showAllSubmissions, setShowAllSubmissions] = useState(false);
 
   const teacherMap = new Map(teachers.map(t => [t.id, t.name]));
 
@@ -261,21 +262,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
 
   const filteredSubmissions = getFilteredSubmissions();
 
+  // Filter to show only latest submission per teacher (unless showAllSubmissions is true)
+  const getLatestSubmissionsPerTeacher = (subs: PollSubmission[]): PollSubmission[] => {
+    if (showAllSubmissions) return subs;
+
+    const latestMap = new Map<string, PollSubmission>();
+    subs.forEach(sub => {
+      const existing = latestMap.get(sub.teacherId);
+      if (!existing || sub.timestamp > existing.timestamp) {
+        latestMap.set(sub.teacherId, sub);
+      }
+    });
+    return Array.from(latestMap.values());
+  };
+
+  const deduplicatedSubmissions = getLatestSubmissionsPerTeacher(filteredSubmissions);
+
   // Academy location (Pasig City)
   const academyLat = 14.5764;
   const academyLng = 121.0851;
 
-  const sortedSubmissions = [...filteredSubmissions].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const sortedSubmissions = [...deduplicatedSubmissions].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-  // Calculate analytics based on filtered submissions
+  // Calculate analytics based on deduplicated submissions (latest per teacher)
   const analytics = {
-    total: filteredSubmissions.length,
-    available: filteredSubmissions.filter(s => s.status === PollStatus.AVAILABLE).length,
-    late: filteredSubmissions.filter(s => s.status === PollStatus.LATE).length,
-    online: filteredSubmissions.filter(s => s.status === PollStatus.ONLINE_ONLY).length,
-    unavailable: filteredSubmissions.filter(s => s.status === PollStatus.UNAVAILABLE).length,
-    emergency: filteredSubmissions.filter(s => s.status === PollStatus.EMERGENCY).length,
+    total: deduplicatedSubmissions.length,
+    available: deduplicatedSubmissions.filter(s => s.status === PollStatus.AVAILABLE).length,
+    late: deduplicatedSubmissions.filter(s => s.status === PollStatus.LATE).length,
+    online: deduplicatedSubmissions.filter(s => s.status === PollStatus.ONLINE_ONLY).length,
+    unavailable: deduplicatedSubmissions.filter(s => s.status === PollStatus.UNAVAILABLE).length,
+    emergency: deduplicatedSubmissions.filter(s => s.status === PollStatus.EMERGENCY).length,
   };
+
+  // Count how many teachers have multiple submissions
+  const teacherSubmissionCounts = new Map<string, number>();
+  filteredSubmissions.forEach(sub => {
+    teacherSubmissionCounts.set(sub.teacherId, (teacherSubmissionCounts.get(sub.teacherId) || 0) + 1);
+  });
+  const teachersWithMultipleSubmissions = Array.from(teacherSubmissionCounts.values()).filter(count => count > 1).length;
   
   const handleGetSummary = async () => {
     setIsSummaryLoading(true);
@@ -404,14 +428,62 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
             />
           </div>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-          Showing {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''}
-          {customDate && ` for ${new Date(customDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
-          {dateFilter === 'today' && !customDate && ' from today'}
-          {dateFilter === 'yesterday' && !customDate && ' from yesterday'}
-          {dateFilter === 'week' && !customDate && ' from the last 7 days'}
-          {dateFilter === 'all' && !customDate && ' (all time)'}
-        </p>
+
+        {/* Toggle for showing all submissions vs latest per teacher */}
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Show submissions:</span>
+              <button
+                onClick={() => setShowAllSubmissions(false)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  !showAllSubmissions
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500'
+                }`}
+              >
+                Latest Only
+              </button>
+              <button
+                onClick={() => setShowAllSubmissions(true)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  showAllSubmissions
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500'
+                }`}
+              >
+                Full History
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            {showAllSubmissions ? (
+              <>
+                Showing all {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''}
+                {teachersWithMultipleSubmissions > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">
+                    {' '}({teachersWithMultipleSubmissions} teacher{teachersWithMultipleSubmissions !== 1 ? 's' : ''} with multiple submissions)
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                Showing latest submission for {deduplicatedSubmissions.length} teacher{deduplicatedSubmissions.length !== 1 ? 's' : ''}
+                {filteredSubmissions.length !== deduplicatedSubmissions.length && (
+                  <span className="text-slate-400 dark:text-slate-500">
+                    {' '}(hiding {filteredSubmissions.length - deduplicatedSubmissions.length} older submission{filteredSubmissions.length - deduplicatedSubmissions.length !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </>
+            )}
+            {customDate && ` for ${new Date(customDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
+            {dateFilter === 'today' && !customDate && ' from today'}
+            {dateFilter === 'yesterday' && !customDate && ' from yesterday'}
+            {dateFilter === 'week' && !customDate && ' from the last 7 days'}
+            {dateFilter === 'all' && !customDate && ' (all time)'}
+          </p>
+        </div>
       </div>
 
       {/* Analytics Cards */}
@@ -575,7 +647,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
               return (
               <tr key={sub.id}>
                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {teacherMap.get(sub.teacherId) || 'Unknown Teacher'}
+                  <div className="flex items-center gap-2">
+                    <span>{teacherMap.get(sub.teacherId) || 'Unknown Teacher'}</span>
+                    {showAllSubmissions && (teacherSubmissionCounts.get(sub.teacherId) || 0) > 1 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        {teacherSubmissionCounts.get(sub.teacherId)}× submitted
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className={`px-4 py-4 whitespace-nowrap text-sm font-semibold ${statusTextColors[sub.status]}`}>
                   {statusLabels[sub.status]}
