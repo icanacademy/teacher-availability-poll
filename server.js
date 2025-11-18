@@ -536,17 +536,20 @@ app.get('/api/teachers-schedules', async (req, res) => {
     }
 
     const data = await response.json();
-    const teachers = data.results.map((page) => {
-      const properties = page.properties;
-      return {
-        id: properties['Teacher ID']?.rich_text?.[0]?.plain_text || page.id,
-        name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
-        startTime: properties['Start Time']?.select?.name || '',
-        endTime: properties['End Time']?.select?.name || '',
-      };
-    });
+    const teachers = data.results
+      .map((page) => {
+        const properties = page.properties;
+        return {
+          id: properties['Teacher ID']?.rich_text?.[0]?.plain_text || page.id,
+          name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
+          startTime: properties['Start Time']?.select?.name || '',
+          endTime: properties['End Time']?.select?.name || '',
+          status: properties['Status']?.select?.name || '',
+        };
+      })
+      .filter(teacher => teacher.status === 'Active');
 
-    console.log(`✅ Successfully loaded ${teachers.length} teachers with schedules from Notion`);
+    console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion`);
     res.json(teachers);
   } catch (error) {
     console.error('Error fetching teachers schedules:', error);
