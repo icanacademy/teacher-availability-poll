@@ -132,7 +132,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     const today = new Date().toISOString().split('T')[0];
 
     submissions
-      .filter(sub => sub.timestamp.startsWith(today))
+      .filter(sub => {
+        // Handle both string and Date timestamp formats
+        const timestampStr = typeof sub.timestamp === 'string'
+          ? sub.timestamp
+          : new Date(sub.timestamp).toISOString();
+        return timestampStr.startsWith(today);
+      })
       .forEach(sub => {
         const existing = latestSubmissions.get(sub.teacherId);
         if (!existing || sub.timestamp > existing.timestamp) {
