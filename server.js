@@ -504,10 +504,118 @@ app.post('/api/migrate-submissions', async (req, res) => {
   }
 });
 
+// GET /api/teachers-schedules - Fetch teachers with their schedules (Start Time, End Time)
+app.get('/api/teachers-schedules', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_TEACHERS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials'
+      });
+    }
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Notion API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `Notion API error: ${response.status}`,
+        details: errorText
+      });
+    }
+
+    const data = await response.json();
+    const teachers = data.results.map((page) => {
+      const properties = page.properties;
+      return {
+        id: properties['Teacher ID']?.rich_text?.[0]?.plain_text || page.id,
+        name: properties['Name']?.title?.[0]?.plain_text || 'Unknown',
+        startTime: properties['Start Time']?.rich_text?.[0]?.plain_text || '',
+        endTime: properties['End Time']?.rich_text?.[0]?.plain_text || '',
+      };
+    });
+
+    res.json(teachers);
+  } catch (error) {
+    console.error('Error fetching teachers schedules:', error);
+    res.status(500).json({
+      error: 'Failed to fetch teachers schedules',
+      details: error.message
+    });
+  }
+});
+
+// GET /api/students - Fetch students with schedules (Start Time, End Time, Grade, Status)
+app.get('/api/students', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_STUDENTS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials'
+      });
+    }
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Notion API error:', response.status, errorText);
+      return res.status(response.status).json({
+        error: `Notion API error: ${response.status}`,
+        details: errorText
+      });
+    }
+
+    const data = await response.json();
+    const students = data.results.map((page) => {
+      const properties = page.properties;
+      return {
+        id: page.id,
+        name: properties['Name']?.title?.[0]?.plain_text || 'Unknown',
+        startTime: properties['Start Time']?.rich_text?.[0]?.plain_text || '',
+        endTime: properties['End Time']?.rich_text?.[0]?.plain_text || '',
+        grade: properties['Grade']?.rich_text?.[0]?.plain_text || '',
+        status: properties['Status']?.select?.name || 'Active',
+      };
+    });
+
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    res.status(500).json({
+      error: 'Failed to fetch students',
+      details: error.message
+    });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📡 Network: http://192.168.68.153:${PORT}`);
   console.log(`📚 Teachers API available at http://localhost:${PORT}/api/teachers`);
+  console.log(`👨‍🏫 Teachers Schedules API available at http://localhost:${PORT}/api/teachers-schedules`);
+  console.log(`👦 Students API available at http://localhost:${PORT}/api/students`);
   console.log(`📝 Submissions API available at http://localhost:${PORT}/api/submissions`);
   console.log(`🔧 Migration endpoint available at http://localhost:${PORT}/api/migrate-submissions (POST)`);
 });
