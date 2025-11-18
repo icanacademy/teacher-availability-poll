@@ -2,11 +2,13 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# NOAH's Ark - Teacher Availability Poll
 
-This contains everything you need to run your app locally.
+**N**otification **O**f **A**vailability & **H**azards
 
-View your app in AI Studio: https://ai.studio/apps/drive/10tYLAgYdlc4M_xJMzSn9ExEgA4zyoGLc
+A real-time teacher availability tracking system with weather advisories and admin dashboard.
+
+**Live App:** https://icannoah.vercel.app
 
 ## Run Locally
 
