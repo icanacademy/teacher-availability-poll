@@ -47,6 +47,12 @@ app.use(cors({
       return callback(null, true);
     }
 
+    // Allow Vercel production domains
+    if (origin === 'https://teacher-availability-poll.vercel.app' ||
+        origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+
     // Reject other origins
     callback(new Error('Not allowed by CORS'));
   }
