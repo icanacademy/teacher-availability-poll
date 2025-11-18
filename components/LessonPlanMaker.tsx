@@ -200,12 +200,22 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
   // Generate lesson plan for all shifts
   const generateLessonPlan = () => {
+    console.log('🎯 Starting lesson plan generation...');
+    console.log('📊 Total teachers:', teacherSchedules.length);
+    console.log('👥 Total students:', allStudents.length);
+    console.log('✅ Attending students:', attendingStudents.size);
+    console.log('📝 Total submissions:', submissions.length);
+
     const newPlan = new Map<string, ClassAssignment[]>();
 
     TIME_SHIFTS.forEach(shift => {
       const availableTeachers = getAvailableTeachers(shift);
       const availableStudents = getAvailableStudents(shift);
       const classes: ClassAssignment[] = [];
+
+      console.log(`\n⏰ Shift ${shift.label}:`);
+      console.log(`  Teachers available: ${availableTeachers.length}`);
+      console.log(`  Students available: ${availableStudents.length}`);
 
       if (availableTeachers.length === 0 || availableStudents.length === 0) {
         newPlan.set(shift.id, classes);
@@ -275,8 +285,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         }
       }
 
+      console.log(`  Classes created: ${classes.length}`);
       newPlan.set(shift.id, classes);
     });
+
+    const totalClasses = Array.from(newPlan.values()).reduce((sum, classes) => sum + classes.length, 0);
+    console.log(`\n✨ Lesson plan generated! Total classes: ${totalClasses}`);
+    console.log(`📋 Plan size: ${newPlan.size} shifts`);
 
     setLessonPlan(newPlan);
   };
