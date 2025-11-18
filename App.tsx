@@ -418,8 +418,27 @@ const App: React.FC = () => {
       },
       (error) => {
         console.error("Geolocation error:", error);
-        setLocationError("Could not get your GPS location. Please select your location manually below.");
+        let errorMessage = "Could not get your GPS location. Please select your location manually below.";
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Location permission denied. Please allow location access or select your city manually below.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Location information unavailable. Please select your city manually below.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Location request timed out. Please try again or select your city manually below.";
+            break;
+        }
+
+        setLocationError(errorMessage);
         setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000, // 10 seconds timeout
+        maximumAge: 0
       }
     );
   };
