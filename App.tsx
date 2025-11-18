@@ -11,6 +11,7 @@ import { POLL_OPTIONS, REASON_OPTIONS } from './constants';
 import { PollStatus } from './types';
 import type { WeatherData, PollCounts, Location, Teacher, PollSubmission } from './types';
 import { PHILIPPINE_CITIES } from './data/philippineCities';
+import { findInternationalCity } from './data/internationalCities';
 import { CameraIcon, MessageSquareIcon, VideoIcon, XIcon } from './components/icons';
 
 // --- LOCATION UTILITIES ---
@@ -461,17 +462,31 @@ const App: React.FC = () => {
 
   const handleManualLocationIntl = (location: string) => {
     if (location.trim()) {
-      // For international locations, use a default coordinate (Manila)
-      // In a real app, you'd geocode this location
-      const defaultCoords = { lat: 14.5995, lng: 120.9842 };
-      setUserCoords(defaultCoords);
-      setInternationalLocation(location);
-      setLocationMethod('manual-intl');
-      setLocationError(null);
+      // Try to find the city in our international cities database
+      const foundCity = findInternationalCity(location);
 
-      // Fetch weather with default coordinates (Manila)
-      // Note: This will show Manila weather for international locations
-      getWeatherData(defaultCoords.lat, defaultCoords.lng);
+      if (foundCity) {
+        // Use the actual city coordinates
+        const cityCoords = { lat: foundCity.lat, lng: foundCity.lng };
+        setUserCoords(cityCoords);
+        setInternationalLocation(`${foundCity.name}, ${foundCity.country}`);
+        setLocationMethod('manual-intl');
+        setLocationError(null);
+
+        // Fetch weather for the actual city location
+        console.log(`📍 Found international city: ${foundCity.name}, ${foundCity.country} (${foundCity.lat}, ${foundCity.lng})`);
+        getWeatherData(cityCoords.lat, cityCoords.lng);
+      } else {
+        // City not found in database - use Manila as fallback
+        const defaultCoords = { lat: 14.5995, lng: 120.9842 };
+        setUserCoords(defaultCoords);
+        setInternationalLocation(location);
+        setLocationMethod('manual-intl');
+        setLocationError('⚠️ City not found in our database. Using Manila weather as fallback. Try typing just the city name (e.g., "Tokyo", "Singapore", "New York")');
+
+        console.log(`⚠️ International city not found: "${location}". Using Manila coordinates as fallback.`);
+        getWeatherData(defaultCoords.lat, defaultCoords.lng);
+      }
     }
   };
 
