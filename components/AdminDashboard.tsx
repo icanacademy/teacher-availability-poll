@@ -557,8 +557,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
           </p>
         </div>
       </div>
+      )}
 
-      {/* Charts Section */}
+      {/* Charts Section - Only show for Latest and Full History views */}
+      {viewMode !== 'not-submitted' && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Response Rate Chart */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
