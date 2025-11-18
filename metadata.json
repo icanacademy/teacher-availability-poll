@@ -1,0 +1,7 @@
+{
+  "name": "Teacher Availability Poll",
+  "description": "A simple polling app for teachers to report their availability to come into the academy, featuring a weather forecast banner for their location and the office.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
