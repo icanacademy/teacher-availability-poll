@@ -159,6 +159,16 @@ export const findNearestLocation = (lat: number, lng: number): LocationOption | 
   return nearestLocation;
 };
 
+// Helper to find location by display name (for correcting old submissions)
+export const findLocationByDisplayName = (displayName: string): LocationOption | null => {
+  if (!displayName) return null;
+  const normalized = displayName.trim().toLowerCase();
+  return UNIFIED_LOCATIONS.find(loc =>
+    loc.displayName.toLowerCase() === normalized ||
+    loc.name.toLowerCase() === normalized
+  ) || null;
+};
+
 // Helper to group locations by category
 export const groupLocationsByCategory = () => {
   const grouped = {

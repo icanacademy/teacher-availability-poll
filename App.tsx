@@ -10,7 +10,7 @@ import { fetchTeachersFromNotion } from './services/notionService';
 import { POLL_OPTIONS, REASON_OPTIONS } from './constants';
 import { PollStatus } from './types';
 import type { WeatherData, PollCounts, Location, Teacher, PollSubmission } from './types';
-import { groupLocationsByCategory, findLocationById, findNearestLocation, type LocationOption } from './data/unifiedLocations';
+import { groupLocationsByCategory, findLocationById, findNearestLocation, findLocationByDisplayName, type LocationOption } from './data/unifiedLocations';
 import { CameraIcon, MessageSquareIcon, VideoIcon, XIcon } from './components/icons';
 
 // --- LOCATION UTILITIES ---
@@ -160,6 +160,16 @@ const fetchSubmissionsFromBackend = async (): Promise<PollSubmission[]> => {
         // New format: coordinates in separate field
         coords = parseCoords(sub.coordinates);
         locationName = sub.location || 'Unknown Location';
+
+        // Auto-correct coordinates for old submissions with wrong coords
+        // If location name exists, try to find correct coordinates from unified locations
+        if (locationName !== 'Unknown Location') {
+          const correctLocation = findLocationByDisplayName(locationName);
+          if (correctLocation) {
+            coords = { lat: correctLocation.lat, lng: correctLocation.lng };
+            console.log(`✓ Auto-corrected coordinates for ${locationName}: ${coords.lat}, ${coords.lng}`);
+          }
+        }
       } else if (sub.location && isCoordinateString(sub.location)) {
         // Old format: coordinates in location field
         coords = parseCoords(sub.location);
