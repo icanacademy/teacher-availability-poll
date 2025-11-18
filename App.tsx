@@ -495,7 +495,7 @@ const App: React.FC = () => {
         setError("Please select your status before submitting.");
         return;
     }
-    if (!userCoords) {
+    if (!userCoords || !locationDisplayName) {
         setError("Please set your location (use GPS or select from dropdown) before submitting your status.");
         return;
     }
