@@ -48,7 +48,8 @@ app.use(cors({
     }
 
     // Allow Vercel production domains
-    if (origin === 'https://teacher-availability-poll.vercel.app' ||
+    if (origin === 'https://icannoah.vercel.app' ||
+        origin === 'https://teacher-availability-poll.vercel.app' ||
         origin.endsWith('.vercel.app')) {
       return callback(null, true);
     }
