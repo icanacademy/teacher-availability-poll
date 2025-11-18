@@ -127,10 +127,15 @@ const SubmissionDetailsModal: React.FC<{
                                 {submission.teacherVideo && (
                                     <div>
                                         <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-1">Uploaded Video</p>
-                                        <video 
-                                            src={`data:${submission.teacherVideo.mimeType};base64,${submission.teacherVideo.data}`} 
-                                            controls 
-                                            className="max-w-xs max-h-48 rounded-lg border border-slate-200 dark:border-slate-700" 
+                                        <video
+                                            src={
+                                                // Handle both Cloudinary URLs (new) and base64 data (old)
+                                                submission.teacherVideo.data
+                                                    ? `data:${submission.teacherVideo.mimeType};base64,${submission.teacherVideo.data}`
+                                                    : submission.teacherVideo.mimeType // Cloudinary URL stored in mimeType field
+                                            }
+                                            controls
+                                            className="max-w-xs max-h-48 rounded-lg border border-slate-200 dark:border-slate-700"
                                         />
                                     </div>
                                 )}

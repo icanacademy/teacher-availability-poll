@@ -192,6 +192,8 @@ const fetchSubmissionsFromBackend = async (): Promise<PollSubmission[]> => {
         locationName: locationName,
         reason: sub.reason,
         weatherData: fakeWeatherData, // Use fake weather data for now
+        teacherPhoto: sub.photoUrl, // Cloudinary photo URL
+        teacherVideo: sub.videoUrl ? { data: '', mimeType: sub.videoUrl } : undefined, // Store video URL in mimeType field temporarily
       };
     });
   } catch (error) {

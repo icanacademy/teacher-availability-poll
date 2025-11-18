@@ -295,6 +295,14 @@ app.get('/api/submissions', async (req, res) => {
     const submissions = data.results.map((page) => {
       const properties = page.properties;
 
+      // Extract photo URL if it exists
+      const photoUrl = properties['Photo']?.files?.[0]?.external?.url ||
+                       properties['Photo']?.files?.[0]?.file?.url || '';
+
+      // Extract video URL if it exists
+      const videoUrl = properties['Video']?.files?.[0]?.external?.url ||
+                       properties['Video']?.files?.[0]?.file?.url || '';
+
       return {
         id: page.id,
         teacherId: properties['Teacher ID']?.rich_text?.[0]?.plain_text || '',
@@ -303,7 +311,9 @@ app.get('/api/submissions', async (req, res) => {
         reason: properties['Reason']?.rich_text?.[0]?.plain_text || '',
         location: properties['Location']?.rich_text?.[0]?.plain_text || '',
         coordinates: properties['Coordinates']?.rich_text?.[0]?.plain_text || '',
-        timestamp: properties['Timestamp']?.date?.start || new Date().toISOString()
+        timestamp: properties['Timestamp']?.date?.start || new Date().toISOString(),
+        photoUrl: photoUrl || undefined,
+        videoUrl: videoUrl || undefined
       };
     });
 
