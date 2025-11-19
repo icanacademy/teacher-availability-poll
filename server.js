@@ -904,28 +904,35 @@ app.get('/api/lesson-plans', async (req, res) => {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Notion API error:', error);
-      return res.status(response.status).json({ error: error.message || 'Failed to fetch lesson plans' });
+      console.error('Notion API error (GET):', JSON.stringify(error, null, 2));
+      return res.status(response.status).json({ error: error.message || 'Failed to fetch lesson plans', details: error });
     }
 
     const data = await response.json();
 
     // Parse the results into a more usable format
     const lessonPlans = data.results.map(page => {
-      const props = page.properties;
-      return {
-        id: page.id,
-        title: props['Title']?.title?.[0]?.plain_text || '',
-        date: props['Date']?.date?.start || '',
-        shift: props['Shift']?.select?.name || '',
-        teacherName: props['Teacher Name']?.rich_text?.[0]?.plain_text || '',
-        teacherId: props['Teacher ID']?.rich_text?.[0]?.plain_text || '',
-        studentCount: props['Student Count']?.number || 0,
-        deliveryMode: props['Delivery Mode']?.select?.name || '',
-        planKey: props['Plan Key']?.rich_text?.[0]?.plain_text || '',
-        lessonPlan: JSON.parse(props['Lesson Plan JSON']?.rich_text?.[0]?.plain_text || '{}')
-      };
-    });
+      try {
+        const props = page.properties;
+        // Concatenate all rich_text blocks for Lesson Plan JSON
+        const lessonPlanJsonText = props['Lesson Plan JSON']?.rich_text?.map(t => t.plain_text).join('') || '{}';
+        return {
+          id: page.id,
+          title: props['Title']?.title?.[0]?.plain_text || '',
+          date: props['Date']?.date?.start || '',
+          shift: props['Shift']?.select?.name || '',
+          teacherName: props['Teacher Name']?.rich_text?.[0]?.plain_text || '',
+          teacherId: props['Teacher ID']?.rich_text?.[0]?.plain_text || '',
+          studentCount: props['Student Count']?.number || 0,
+          deliveryMode: props['Delivery Mode']?.select?.name || '',
+          planKey: props['Plan Key']?.rich_text?.[0]?.plain_text || '',
+          lessonPlan: JSON.parse(lessonPlanJsonText)
+        };
+      } catch (parseError) {
+        console.error('Error parsing lesson plan:', parseError, page.id);
+        return null;
+      }
+    }).filter(plan => plan !== null);
 
     res.json(lessonPlans);
   } catch (error) {
