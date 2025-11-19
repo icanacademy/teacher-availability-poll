@@ -847,8 +847,11 @@ app.post('/api/lesson-plans', async (req, res) => {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Notion API error:', error);
-      return res.status(response.status).json({ error: error.message || 'Failed to save lesson plan' });
+      console.error('Notion API error:', JSON.stringify(error, null, 2));
+      return res.status(response.status).json({
+        error: error.message || 'Failed to save lesson plan',
+        details: error
+      });
     }
 
     const data = await response.json();
