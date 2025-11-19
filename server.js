@@ -563,7 +563,7 @@ app.get('/api/teachers-schedules', async (req, res) => {
       });
 
     // Log teachers that will be filtered out
-    const filteredOut = allTeachers.filter(t => t.status !== 'Active');
+    const filteredOut = allTeachers.filter(t => (t.status || '').trim().toLowerCase() !== 'active');
     if (filteredOut.length > 0) {
       console.log(`⚠️ Teachers filtered out (not Active):`);
       filteredOut.forEach(t => {
@@ -571,7 +571,7 @@ app.get('/api/teachers-schedules', async (req, res) => {
       });
     }
 
-    const teachers = allTeachers.filter(teacher => teacher.status === 'Active');
+    const teachers = allTeachers.filter(teacher => (teacher.status || '').trim().toLowerCase() === 'active');
 
     console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion (${filteredOut.length} filtered out)`);
     res.json(teachers);
