@@ -345,20 +345,62 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         console.log(`  📊 Children grades: ${grades.join(', ')}`);
       }
 
-      // Step 3: Calculate minimum classes needed for efficiency
+      // Step 3: Allocate teachers to maximize student coverage (minimize self-study)
       const MAX_GRADE_SPREAD = 5; // Maximum acceptable grade difference in one class
 
-      // Calculate ideal number of classes for children
-      let minClassesForChildren = children.length > 0 ? Math.ceil(children.length / MAX_CLASS_SIZE) : 0;
+      // Calculate MINIMUM classes needed for each group
+      const minClassesForChildren = children.length > 0 ? Math.ceil(children.length / MAX_CLASS_SIZE) : 0;
+      const minClassesForAdults = adults.length > 0 ? Math.ceil(adults.length / MAX_CLASS_SIZE) : 0;
+      const totalMinClasses = minClassesForChildren + minClassesForAdults;
 
-      // Reserve teachers for adults if needed
-      const classesForAdults = adults.length > 0 ? Math.ceil(adults.length / MAX_CLASS_SIZE) : 0;
+      // Allocate teachers: use ALL available teachers to cover students
+      let teachersForChildren = 0;
+      let teachersForAdults = 0;
 
-      // Total teachers we can use
-      const availableForChildren = Math.max(0, numTeachers - classesForAdults);
+      if (numTeachers >= totalMinClasses) {
+        // We have enough or extra teachers - distribute proportionally
+        teachersForChildren = minClassesForChildren;
+        teachersForAdults = minClassesForAdults;
 
-      // Use minimum of what we need and what's available
-      let numChildClasses = Math.min(minClassesForChildren, availableForChildren);
+        // Distribute extra teachers to reduce class sizes
+        let extraTeachers = numTeachers - totalMinClasses;
+        while (extraTeachers > 0) {
+          // Give extra teacher to whichever group has more students per class
+          const childrenPerClass = teachersForChildren > 0 ? children.length / teachersForChildren : 0;
+          const adultsPerClass = teachersForAdults > 0 ? adults.length / teachersForAdults : 0;
+
+          if (childrenPerClass >= adultsPerClass && children.length > 0) {
+            teachersForChildren++;
+          } else if (adults.length > 0) {
+            teachersForAdults++;
+          } else {
+            break; // No more students to distribute
+          }
+          extraTeachers--;
+        }
+      } else {
+        // Not enough teachers - prioritize covering all students
+        // Distribute proportionally based on student counts
+        const totalStudents = children.length + adults.length;
+        if (totalStudents > 0) {
+          teachersForChildren = Math.round((children.length / totalStudents) * numTeachers);
+          teachersForAdults = numTeachers - teachersForChildren;
+
+          // Ensure at least 1 teacher per group if they have students
+          if (children.length > 0 && teachersForChildren === 0 && numTeachers > 0) {
+            teachersForChildren = 1;
+            teachersForAdults = numTeachers - 1;
+          }
+          if (adults.length > 0 && teachersForAdults === 0 && numTeachers > 1) {
+            teachersForAdults = 1;
+            teachersForChildren = numTeachers - 1;
+          }
+        }
+      }
+
+      console.log(`  📋 Teacher allocation: ${teachersForChildren} for children, ${teachersForAdults} for adults`);
+
+      let numChildClasses = teachersForChildren;
 
       let teacherIdx = 0;
 
@@ -382,7 +424,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           const spread = Math.max(...grades) - Math.min(...grades);
 
           // If spread is too wide and we have extra teachers, split this class
-          if (spread > MAX_GRADE_SPREAD && teacherIdx + 1 < availableForChildren && classStudents.length > 2) {
+          if (spread > MAX_GRADE_SPREAD && teacherIdx + 1 < teachersForChildren && classStudents.length > 2) {
             // Split into two smaller classes
             const midpoint = Math.ceil(classStudents.length / 2);
             const firstHalf = classStudents.slice(0, midpoint);
@@ -429,15 +471,18 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         console.log(`  ✅ Created ${teacherIdx} classes for ${children.length} children (efficiency: ${(children.length / teacherIdx).toFixed(1)} students/teacher)`);
       }
 
-      // Step 5: Distribute adults to remaining teachers
-      if (adults.length > 0 && teacherIdx < numTeachers) {
-        const remainingTeachers = numTeachers - teacherIdx;
-        const adultsPerClass = Math.ceil(adults.length / Math.min(remainingTeachers, classesForAdults));
+      // Step 5: Distribute adults to their allocated teachers
+      if (adults.length > 0 && teachersForAdults > 0) {
+        const baseSize = Math.floor(adults.length / teachersForAdults);
+        const extras = adults.length % teachersForAdults;
 
         let adultIdx = 0;
-        while (adultIdx < adults.length && teacherIdx < numTeachers) {
-          const classStudents = adults.slice(adultIdx, adultIdx + Math.min(adultsPerClass, MAX_CLASS_SIZE));
-          adultIdx += classStudents.length;
+        for (let classNum = 0; classNum < teachersForAdults && teacherIdx < numTeachers; classNum++) {
+          const classSize = baseSize + (classNum < extras ? 1 : 0);
+          if (classSize === 0) continue;
+
+          const classStudents = adults.slice(adultIdx, adultIdx + classSize);
+          adultIdx += classSize;
 
           const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
 
@@ -452,7 +497,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           teacherIdx++;
         }
 
-        console.log(`  ✅ Created ${numTeachers - (teacherIdx - classesForAdults)} classes for ${adults.length} adults`);
+        console.log(`  ✅ Created ${teachersForAdults} classes for ${adults.length} adults`);
       }
 
       console.log(`  Classes created: ${classes.length}`);
