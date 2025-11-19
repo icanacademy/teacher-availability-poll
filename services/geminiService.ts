@@ -347,22 +347,26 @@ interface GeneratedLessonPlan {
     title: string;
     objective: string;
     materials: string[];
-    warmUp: {
-        duration: string;
-        activity: string;
+    firstBlock: {
+        warmUp: {
+            duration: string;
+            activity: string;
+        };
+        mainActivity: {
+            duration: string;
+            activity: string;
+            steps: string[];
+        };
     };
-    mainActivity: {
-        duration: string;
-        activity: string;
-        steps: string[];
-    };
-    practiceActivity: {
-        duration: string;
-        activity: string;
-    };
-    coolDown: {
-        duration: string;
-        activity: string;
+    secondBlock: {
+        practiceActivity: {
+            duration: string;
+            activity: string;
+        };
+        coolDown: {
+            duration: string;
+            activity: string;
+        };
     };
     adaptations: string[];
     emergencyNotes: string;
@@ -432,6 +436,17 @@ const generateEmergencyLessonPlan = async (request: LessonPlanRequest): Promise<
         - Duration: 2 hours (${request.shiftDuration})
         - Delivery Mode: ${deliveryMode}
 
+        **CLASS FLOW STRUCTURE (VERY IMPORTANT):**
+        The 2-hour class follows this exact flow:
+        1. FIRST BLOCK (50 minutes total):
+           - Warm Up: 10 minutes
+           - Main Activity: 40 minutes
+        2. BREAK: 10 minutes (students rest)
+        3. SECOND BLOCK (50 minutes total):
+           - Practice Activity: 40 minutes
+           - Cool Down: 10 minutes
+        4. END OF CLASS
+
         **CRITICAL - Age-Appropriate Content:**
         - Topics and vocabulary MUST be appropriate for ${ageGroup}
         - Use themes related to: ${interests}
@@ -452,22 +467,26 @@ const generateEmergencyLessonPlan = async (request: LessonPlanRequest): Promise<
             "title": "Short engaging title for the lesson",
             "objective": "Clear learning objective in one sentence",
             "materials": ["List of 3-5 simple materials needed"],
-            "warmUp": {
-                "duration": "15 minutes",
-                "activity": "Engaging warm-up activity description"
+            "firstBlock": {
+                "warmUp": {
+                    "duration": "10 minutes",
+                    "activity": "Engaging warm-up activity description"
+                },
+                "mainActivity": {
+                    "duration": "40 minutes",
+                    "activity": "Main activity name",
+                    "steps": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"]
+                }
             },
-            "mainActivity": {
-                "duration": "50 minutes",
-                "activity": "Main activity name",
-                "steps": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"]
-            },
-            "practiceActivity": {
-                "duration": "40 minutes",
-                "activity": "Practice/reinforcement activity description"
-            },
-            "coolDown": {
-                "duration": "15 minutes",
-                "activity": "Wrap-up activity and review"
+            "secondBlock": {
+                "practiceActivity": {
+                    "duration": "40 minutes",
+                    "activity": "Practice/reinforcement activity description"
+                },
+                "coolDown": {
+                    "duration": "10 minutes",
+                    "activity": "Wrap-up activity and review"
+                }
             },
             "adaptations": ["How to adapt for younger students", "How to adapt for older students"],
             "emergencyNotes": "Quick tips for the teacher if things don't go as planned"

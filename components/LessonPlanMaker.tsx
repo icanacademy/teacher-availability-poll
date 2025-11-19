@@ -819,29 +819,68 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     });
     yPos += 5;
 
-    // Activities
-    const activities = [
-      { name: 'WARM UP', duration: plan.warmUp.duration, content: plan.warmUp.activity },
-      { name: 'MAIN ACTIVITY', duration: plan.mainActivity.duration, content: plan.mainActivity.activity, steps: plan.mainActivity.steps },
-      { name: 'PRACTICE', duration: plan.practiceActivity.duration, content: plan.practiceActivity.activity },
-      { name: 'COOL DOWN', duration: plan.coolDown.duration, content: plan.coolDown.activity },
+    // Activities - First Block (50 min)
+    const firstBlockActivities = [
+      { name: 'WARM UP', duration: plan.firstBlock.warmUp.duration, content: plan.firstBlock.warmUp.activity },
+      { name: 'MAIN ACTIVITY', duration: plan.firstBlock.mainActivity.duration, content: plan.firstBlock.mainActivity.activity, steps: plan.firstBlock.mainActivity.steps },
     ];
 
-    activities.forEach(activity => {
+    // First Block Header
+    checkPageBreak(15);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(34, 139, 34); // Forest green
+    doc.text('FIRST BLOCK (50 minutes)', margin, yPos);
+    doc.setTextColor(0, 0, 0);
+    yPos += 8;
+
+    firstBlockActivities.forEach(activity => {
       checkPageBreak(25);
       doc.setFont('helvetica', 'bold');
       doc.text(`${activity.name} (${activity.duration})`, margin, yPos);
       yPos += 5;
       doc.setFont('helvetica', 'normal');
       yPos = addWrappedText(activity.content, margin, yPos, contentWidth, 5);
-
       if (activity.steps) {
-        yPos += 2;
-        activity.steps.forEach((step, i) => {
-          checkPageBreak(6);
-          yPos = addWrappedText(`${i + 1}. ${step}`, margin + 5, yPos, contentWidth - 5, 5);
+        activity.steps.forEach(step => {
+          checkPageBreak(5);
+          yPos = addWrappedText(`• ${step}`, margin + 3, yPos, contentWidth - 3, 5);
         });
       }
+      yPos += 5;
+    });
+
+    // Break indicator
+    checkPageBreak(15);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bolditalic');
+    doc.setTextColor(128, 128, 128);
+    doc.text('--- 10 MINUTE BREAK ---', pageWidth / 2, yPos, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+
+    // Second Block Header
+    checkPageBreak(15);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(70, 130, 180); // Steel blue
+    doc.text('SECOND BLOCK (50 minutes)', margin, yPos);
+    doc.setTextColor(0, 0, 0);
+    yPos += 8;
+
+    // Activities - Second Block (50 min)
+    const secondBlockActivities = [
+      { name: 'PRACTICE', duration: plan.secondBlock.practiceActivity.duration, content: plan.secondBlock.practiceActivity.activity },
+      { name: 'COOL DOWN', duration: plan.secondBlock.coolDown.duration, content: plan.secondBlock.coolDown.activity },
+    ];
+
+    secondBlockActivities.forEach(activity => {
+      checkPageBreak(25);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${activity.name} (${activity.duration})`, margin, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      yPos = addWrappedText(activity.content, margin, yPos, contentWidth, 5);
       yPos += 5;
     });
 
@@ -1160,6 +1199,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
                             {/* Activities Timeline */}
                             <div className="space-y-3">
+                              {/* First Block Header */}
+                              <div className="text-center">
+                                <span className="inline-block bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-semibold px-3 py-1 rounded-full">
+                                  FIRST BLOCK (50 minutes)
+                                </span>
+                              </div>
+
                               {/* Warm Up */}
                               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
                                 <div className="flex items-center justify-between mb-1">
@@ -1167,11 +1213,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                                     🌅 Warm Up
                                   </h6>
                                   <span className="text-xs text-green-600 dark:text-green-400">
-                                    {generatedPlan.warmUp.duration}
+                                    {generatedPlan.firstBlock.warmUp.duration}
                                   </span>
                                 </div>
                                 <p className="text-sm text-green-800 dark:text-green-200">
-                                  {generatedPlan.warmUp.activity}
+                                  {generatedPlan.firstBlock.warmUp.activity}
                                 </p>
                               </div>
 
@@ -1179,17 +1225,35 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                                 <div className="flex items-center justify-between mb-1">
                                   <h6 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-                                    📚 Main Activity: {generatedPlan.mainActivity.activity}
+                                    📚 Main Activity: {generatedPlan.firstBlock.mainActivity.activity}
                                   </h6>
                                   <span className="text-xs text-blue-600 dark:text-blue-400">
-                                    {generatedPlan.mainActivity.duration}
+                                    {generatedPlan.firstBlock.mainActivity.duration}
                                   </span>
                                 </div>
                                 <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-decimal">
-                                  {generatedPlan.mainActivity.steps.map((step, i) => (
+                                  {generatedPlan.firstBlock.mainActivity.steps.map((step, i) => (
                                     <li key={i}>{step}</li>
                                   ))}
                                 </ol>
+                              </div>
+
+                              {/* Break Indicator */}
+                              <div className="text-center py-2">
+                                <div className="flex items-center justify-center gap-2">
+                                  <div className="h-px bg-slate-300 dark:bg-slate-600 flex-1"></div>
+                                  <span className="text-sm text-slate-500 dark:text-slate-400 font-medium px-2">
+                                    ☕ 10 MINUTE BREAK
+                                  </span>
+                                  <div className="h-px bg-slate-300 dark:bg-slate-600 flex-1"></div>
+                                </div>
+                              </div>
+
+                              {/* Second Block Header */}
+                              <div className="text-center">
+                                <span className="inline-block bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-semibold px-3 py-1 rounded-full">
+                                  SECOND BLOCK (50 minutes)
+                                </span>
                               </div>
 
                               {/* Practice Activity */}
@@ -1199,11 +1263,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                                     ✏️ Practice
                                   </h6>
                                   <span className="text-xs text-yellow-600 dark:text-yellow-400">
-                                    {generatedPlan.practiceActivity.duration}
+                                    {generatedPlan.secondBlock.practiceActivity.duration}
                                   </span>
                                 </div>
                                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                                  {generatedPlan.practiceActivity.activity}
+                                  {generatedPlan.secondBlock.practiceActivity.activity}
                                 </p>
                               </div>
 
@@ -1214,11 +1278,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                                     🌙 Cool Down
                                   </h6>
                                   <span className="text-xs text-indigo-600 dark:text-indigo-400">
-                                    {generatedPlan.coolDown.duration}
+                                    {generatedPlan.secondBlock.coolDown.duration}
                                   </span>
                                 </div>
                                 <p className="text-sm text-indigo-800 dark:text-indigo-200">
-                                  {generatedPlan.coolDown.activity}
+                                  {generatedPlan.secondBlock.coolDown.activity}
                                 </p>
                               </div>
                             </div>
