@@ -55,6 +55,8 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
   const [generatedPlans, setGeneratedPlans] = useState<Map<string, GeneratedLessonPlan>>(new Map());
   const [generatingPlan, setGeneratingPlan] = useState<Set<string>>(new Set());
   const [planErrors, setPlanErrors] = useState<Map<string, string>>(new Map());
+  const [savedPlanKeys, setSavedPlanKeys] = useState<Map<string, string>>(new Map()); // maps planKey to "saved" status
+  const [loadedFromNotion, setLoadedFromNotion] = useState<Set<string>>(new Set()); // tracks which plans were loaded from Notion
 
   // Fetch teacher schedules and students from backend
   useEffect(() => {
@@ -503,6 +505,48 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         newMap.set(planKey, plan);
         return newMap;
       });
+
+      // Remove from "loaded from Notion" since this is a new generation
+      setLoadedFromNotion(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(planKey);
+        return newSet;
+      });
+
+      // Auto-save to Notion
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const today = new Date().toISOString().split('T')[0];
+
+        const saveResponse = await fetch(`${apiUrl}/api/lesson-plans`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: today,
+            shift: classItem.shift,
+            teacherName: classItem.teacher.name,
+            teacherId: classItem.teacher.id,
+            students: classItem.students.map(s => ({ name: s.name, grade: s.grade })),
+            lessonPlan: plan,
+            isOnline
+          })
+        });
+
+        if (saveResponse.ok) {
+          const saveData = await saveResponse.json();
+          setSavedPlanKeys(prev => {
+            const newMap = new Map(prev);
+            newMap.set(planKey, saveData.planKey);
+            return newMap;
+          });
+          console.log('✅ Lesson plan saved to Notion:', saveData.planKey);
+        } else {
+          console.warn('⚠️ Failed to save lesson plan to Notion (will still work locally)');
+        }
+      } catch (saveErr) {
+        console.warn('⚠️ Could not save to Notion:', saveErr);
+        // Don't fail the whole operation - plan is still generated
+      }
     } catch (err) {
       console.error('Error generating lesson plan:', err);
       setPlanErrors(prev => {
@@ -518,6 +562,56 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       });
     }
   };
+
+  // Load existing lesson plans from Notion for today
+  const loadExistingPlans = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const today = new Date().toISOString().split('T')[0];
+
+      const response = await fetch(`${apiUrl}/api/lesson-plans?date=${today}`);
+      if (!response.ok) {
+        console.warn('Could not load existing lesson plans');
+        return;
+      }
+
+      const existingPlans = await response.json();
+      console.log(`📖 Found ${existingPlans.length} existing lesson plans for today`);
+
+      // Map plans to class assignments
+      const classes = lessonPlan.get(activeTab) || [];
+      classes.forEach((classItem, index) => {
+        const matchingPlan = existingPlans.find(
+          (p: { teacherId: string; shift: string }) => p.teacherId === classItem.teacher.id && p.shift === classItem.shift
+        );
+
+        if (matchingPlan && matchingPlan.lessonPlan) {
+          const planKey = `${activeTab}-${index}`;
+          setGeneratedPlans(prev => {
+            const newMap = new Map(prev);
+            newMap.set(planKey, matchingPlan.lessonPlan);
+            return newMap;
+          });
+          setLoadedFromNotion(prev => new Set(prev).add(planKey));
+          setSavedPlanKeys(prev => {
+            const newMap = new Map(prev);
+            newMap.set(planKey, matchingPlan.planKey);
+            return newMap;
+          });
+          console.log(`✅ Loaded existing plan for ${classItem.teacher.name} - ${classItem.shift}`);
+        }
+      });
+    } catch (err) {
+      console.warn('Could not load existing lesson plans:', err);
+    }
+  };
+
+  // Load existing plans when lesson plan is generated
+  useEffect(() => {
+    if (lessonPlan.size > 0) {
+      loadExistingPlans();
+    }
+  }, [lessonPlan, activeTab]);
 
   // Download lesson plan as PDF
   const downloadLessonPlanPDF = (classItem: ClassAssignment, plan: GeneratedLessonPlan) => {
@@ -901,10 +995,22 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                         {generatedPlan && (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                              <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                                <span>✨</span>
-                                AI-Generated Lesson Plan
-                              </h5>
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                                  <span>✨</span>
+                                  AI-Generated Lesson Plan
+                                </h5>
+                                {loadedFromNotion.has(planKey) && (
+                                  <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 rounded">
+                                    📂 Loaded from saved
+                                  </span>
+                                )}
+                                {savedPlanKeys.has(planKey) && !loadedFromNotion.has(planKey) && (
+                                  <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 rounded">
+                                    ✅ Saved
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => downloadLessonPlanPDF(classItem, generatedPlan)}
