@@ -44,6 +44,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [attendingStudents, setAttendingStudents] = useState<Set<string>>(new Set());
   const [lessonPlan, setLessonPlan] = useState<Map<string, ClassAssignment[]>>(new Map());
+  const [selfStudyStudents, setSelfStudyStudents] = useState<Map<string, Student[]>>(new Map());
   const [activeTab, setActiveTab] = useState<string>('8-10');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +262,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     });
 
     const newPlan = new Map<string, ClassAssignment[]>();
+    const newSelfStudy = new Map<string, Student[]>();
 
     TIME_SHIFTS.forEach(shift => {
       const availableTeachers = getAvailableTeachers(shift);
@@ -380,14 +382,20 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         });
       }
 
+      // Track self-study students (those without teachers)
+      newSelfStudy.set(shift.id, remainingUnassigned);
+
       newPlan.set(shift.id, classes);
     });
 
     const totalClasses = Array.from(newPlan.values()).reduce((sum, classes) => sum + classes.length, 0);
+    const totalSelfStudy = Array.from(newSelfStudy.values()).reduce((sum, students) => sum + students.length, 0);
     console.log(`\n✨ Lesson plan generated! Total classes: ${totalClasses}`);
     console.log(`📋 Plan size: ${newPlan.size} shifts`);
+    console.log(`📖 Self-study students: ${totalSelfStudy}`);
 
     setLessonPlan(newPlan);
+    setSelfStudyStudents(newSelfStudy);
   };
 
   if (loading) {
@@ -505,9 +513,10 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6 space-y-4">
             {(() => {
               const classes = lessonPlan.get(activeTab) || [];
+              const selfStudy = selfStudyStudents.get(activeTab) || [];
               const shift = TIME_SHIFTS.find(s => s.id === activeTab)!;
 
-              if (classes.length === 0) {
+              if (classes.length === 0 && selfStudy.length === 0) {
                 return (
                   <div className="text-center py-8 text-slate-500 dark:text-slate-400">
                     No classes scheduled for {shift.label}
@@ -515,53 +524,93 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                 );
               }
 
-              return classes.map((classItem, index) => (
-                <div
-                  key={index}
-                  className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h4 className="text-md font-semibold text-slate-900 dark:text-white">
-                        Class {index + 1}
-                      </h4>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                        Teacher: <span className="font-medium">{classItem.teacher.name}</span>
-                        {classItem.teacherStatus.toUpperCase().includes('ONLINE') && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                            💻 Online Only
+              return (
+                <>
+                  {classes.map((classItem, index) => (
+                    <div
+                      key={index}
+                      className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="text-md font-semibold text-slate-900 dark:text-white">
+                            Class {index + 1}
+                          </h4>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                            Teacher: <span className="font-medium">{classItem.teacher.name}</span>
+                            {classItem.teacherStatus.toUpperCase().includes('ONLINE') && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                                💻 Online Only
+                              </span>
+                            )}
+                            {classItem.teacherStatus.toUpperCase().includes('LATE') && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                ⏰ Late
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-500">
+                            Grades: {classItem.gradesMixed.join(', ')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {classItem.students.length} students
                           </span>
-                        )}
-                        {classItem.teacherStatus.toUpperCase().includes('LATE') && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                            ⏰ Late
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-500">
-                        Grades: {classItem.gradesMixed.join(', ')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        {classItem.students.length} students
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    {classItem.students.map(student => (
-                      <div
-                        key={student.id}
-                        className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50 rounded text-sm"
-                      >
-                        <span className="text-slate-900 dark:text-white">{student.name}</span>
-                        <span className="text-slate-600 dark:text-slate-400">Grade {student.grade}</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ));
+
+                      <div className="space-y-1">
+                        {classItem.students.map(student => (
+                          <div
+                            key={student.id}
+                            className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-900/50 rounded text-sm"
+                          >
+                            <span className="text-slate-900 dark:text-white">{student.name}</span>
+                            <span className="text-slate-600 dark:text-slate-400">Grade {student.grade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Self Study Section - Students without teachers */}
+                  {selfStudy.length > 0 && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="text-md font-semibold text-amber-900 dark:text-amber-200">
+                            📖 Self Study
+                          </h4>
+                          <p className="text-sm text-amber-700 dark:text-amber-300">
+                            No teacher available - students to study independently
+                          </p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            Grades: {[...new Set(selfStudy.map(s => s.grade))].sort().join(', ')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                            {selfStudy.length} students
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        {selfStudy.map(student => (
+                          <div
+                            key={student.id}
+                            className="flex items-center justify-between px-3 py-2 bg-amber-100/50 dark:bg-amber-900/30 rounded text-sm"
+                          >
+                            <span className="text-amber-900 dark:text-amber-100">{student.name}</span>
+                            <span className="text-amber-700 dark:text-amber-300">Grade {student.grade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
             })()}
           </div>
         </div>
