@@ -301,66 +301,121 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       const numStudents = availableStudents.length;
       const maxCapacity = numTeachers * MAX_CLASS_SIZE;
 
-      // Sort students to prioritize CHILDREN over ADULTS
-      // Children (grades 1-12) get teachers first, adults go to self-study when over capacity
-      const sortedStudents = [...availableStudents].sort((a, b) => {
-        const gradeA = a.grade?.toLowerCase().trim() || '';
-        const gradeB = b.grade?.toLowerCase().trim() || '';
+      // Helper function to get grade band (group similar grades together)
+      const getGradeBand = (grade: string): string => {
+        const g = grade?.toLowerCase().trim() || '';
+        if (g === 'adult' || g === 'university' || g === '' || g === '0') return 'adults';
+        const num = parseInt(g) || 0;
+        if (num >= 1 && num <= 3) return 'lower'; // Grades 1-3
+        if (num >= 4 && num <= 6) return 'upper'; // Grades 4-6
+        if (num >= 7 && num <= 9) return 'middle'; // Grades 7-9
+        if (num >= 10 && num <= 12) return 'high'; // Grades 10-12
+        return 'adults';
+      };
 
-        // Check if grade is adult/university/empty (should be last priority)
-        const isAdultA = gradeA === 'adult' || gradeA === 'university' || gradeA === '' || gradeA === '0';
-        const isAdultB = gradeB === 'adult' || gradeB === 'university' || gradeB === '' || gradeB === '0';
+      // Group students by grade band
+      const gradeBands = new Map<string, Student[]>();
+      const bandOrder = ['lower', 'upper', 'middle', 'high', 'adults'];
+      bandOrder.forEach(band => gradeBands.set(band, []));
 
-        // Children first, adults last
-        if (isAdultA && !isAdultB) return 1;  // A is adult, B is child -> B first
-        if (!isAdultA && isAdultB) return -1; // A is child, B is adult -> A first
-
-        // If both children, sort by grade (younger first)
-        if (!isAdultA && !isAdultB) {
-          const numA = parseInt(gradeA) || 0;
-          const numB = parseInt(gradeB) || 0;
-          return numA - numB;
-        }
-
-        // If both adults, keep original order
-        return 0;
+      availableStudents.forEach(student => {
+        const band = getGradeBand(student.grade);
+        gradeBands.get(band)!.push(student);
       });
 
-      // Students to assign (up to capacity), self-study for the rest (older ones)
-      const studentsToAssign = sortedStudents.slice(0, Math.min(numStudents, maxCapacity));
-      const selfStudyList = sortedStudents.slice(maxCapacity); // Older students
-
-      if (selfStudyList.length > 0) {
-        console.log(`  📖 ${selfStudyList.length} older students go to Self Study (max capacity: ${maxCapacity})`);
-      }
-
-      // Calculate even distribution
-      const baseClassSize = Math.floor(studentsToAssign.length / numTeachers);
-      const extraStudents = studentsToAssign.length % numTeachers;
-
-      console.log(`  📊 Distribution: ${studentsToAssign.length} students / ${numTeachers} teachers = ~${baseClassSize} each`);
-
-      // Distribute students evenly across all teachers
-      let studentIndex = 0;
-      for (let i = 0; i < numTeachers && studentIndex < studentsToAssign.length; i++) {
-        // Some teachers get one extra student to handle remainder
-        const classSize = baseClassSize + (i < extraStudents ? 1 : 0);
-
-        if (classSize === 0) continue;
-
-        const classStudents = studentsToAssign.slice(studentIndex, studentIndex + classSize);
-        studentIndex += classSize;
-
-        // Determine grades in this class
-        const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
-
-        classes.push({
-          teacher: availableTeachers[i].teacher,
-          students: classStudents,
-          shift: shift.label,
-          gradesMixed: gradesInClass,
-          teacherStatus: availableTeachers[i].status,
+      // Sort students within each band by grade
+      gradeBands.forEach((students, band) => {
+        students.sort((a, b) => {
+          const numA = parseInt(a.grade) || 0;
+          const numB = parseInt(b.grade) || 0;
+          return numA - numB;
         });
+      });
+
+      console.log(`  📊 Grade bands:`);
+      bandOrder.forEach(band => {
+        const students = gradeBands.get(band)!;
+        if (students.length > 0) {
+          console.log(`    - ${band}: ${students.length} students`);
+        }
+      });
+
+      // Distribute teachers to bands based on student count (children first)
+      let teacherIndex = 0;
+      const childBands = ['lower', 'upper', 'middle', 'high'];
+
+      // First pass: assign children to teachers
+      childBands.forEach(band => {
+        const students = gradeBands.get(band)!;
+        if (students.length === 0 || teacherIndex >= numTeachers) return;
+
+        // Calculate how many teachers this band needs
+        const teachersNeeded = Math.ceil(students.length / MAX_CLASS_SIZE);
+        const teachersAvailable = numTeachers - teacherIndex;
+        const teachersForBand = Math.min(teachersNeeded, teachersAvailable);
+
+        if (teachersForBand === 0) return;
+
+        // Distribute students in this band evenly across allocated teachers
+        const baseSize = Math.floor(students.length / teachersForBand);
+        const extra = students.length % teachersForBand;
+
+        let studentIdx = 0;
+        for (let i = 0; i < teachersForBand && studentIdx < students.length; i++) {
+          const classSize = Math.min(baseSize + (i < extra ? 1 : 0), MAX_CLASS_SIZE);
+          if (classSize === 0) continue;
+
+          const classStudents = students.slice(studentIdx, studentIdx + classSize);
+          studentIdx += classSize;
+
+          const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => {
+            return (parseInt(a) || 0) - (parseInt(b) || 0);
+          });
+
+          classes.push({
+            teacher: availableTeachers[teacherIndex].teacher,
+            students: classStudents,
+            shift: shift.label,
+            gradesMixed: gradesInClass,
+            teacherStatus: availableTeachers[teacherIndex].status,
+          });
+
+          teacherIndex++;
+        }
+
+        // Any remaining students in this band go to overflow
+        if (studentIdx < students.length) {
+          console.log(`  ⚠️ ${students.length - studentIdx} students from ${band} band overflow`);
+        }
+      });
+
+      // Second pass: if teachers remain, assign adults
+      const adultStudents = gradeBands.get('adults')!;
+      if (adultStudents.length > 0 && teacherIndex < numTeachers) {
+        const teachersForAdults = numTeachers - teacherIndex;
+        const baseSize = Math.floor(adultStudents.length / teachersForAdults);
+        const extra = adultStudents.length % teachersForAdults;
+
+        let studentIdx = 0;
+        for (let i = 0; i < teachersForAdults && studentIdx < adultStudents.length; i++) {
+          const classSize = Math.min(baseSize + (i < extra ? 1 : 0), MAX_CLASS_SIZE);
+          if (classSize === 0) continue;
+
+          const classStudents = adultStudents.slice(studentIdx, studentIdx + classSize);
+          studentIdx += classSize;
+
+          const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
+
+          classes.push({
+            teacher: availableTeachers[teacherIndex].teacher,
+            students: classStudents,
+            shift: shift.label,
+            gradesMixed: gradesInClass,
+            teacherStatus: availableTeachers[teacherIndex].status,
+          });
+
+          teacherIndex++;
+        }
       }
 
       console.log(`  Classes created: ${classes.length}`);
