@@ -41,6 +41,38 @@ const TIME_SHIFTS = [
   { id: '7-9', label: '7:00 PM - 9:00 PM', start: 19, end: 21 },
 ];
 
+// Helper to normalize old flat lesson plan structure to new nested structure
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const normalizeLessonPlan = (plan: any): GeneratedLessonPlan | null => {
+  if (!plan) return null;
+
+  // Check if it's already in the new format
+  if (plan.firstBlock && plan.secondBlock) {
+    return plan as GeneratedLessonPlan;
+  }
+
+  // Convert old flat format to new nested format
+  if (plan.warmUp && plan.mainActivity && plan.practiceActivity && plan.coolDown) {
+    return {
+      title: plan.title,
+      objective: plan.objective,
+      materials: plan.materials,
+      firstBlock: {
+        warmUp: plan.warmUp,
+        mainActivity: plan.mainActivity,
+      },
+      secondBlock: {
+        practiceActivity: plan.practiceActivity,
+        coolDown: plan.coolDown,
+      },
+      adaptations: plan.adaptations,
+      emergencyNotes: plan.emergencyNotes,
+    };
+  }
+
+  return plan as GeneratedLessonPlan;
+};
+
 export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, teachers }) => {
   const [teacherSchedules, setTeacherSchedules] = useState<TeacherSchedule[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
@@ -1055,7 +1087,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                 <>
                   {classes.map((classItem, index) => {
                     const planKey = `${activeTab}-${index}`;
-                    const generatedPlan = generatedPlans.get(planKey);
+                    const generatedPlan = normalizeLessonPlan(generatedPlans.get(planKey));
                     const isGenerating = generatingPlan.has(planKey);
                     const planError = planErrors.get(planKey);
 
