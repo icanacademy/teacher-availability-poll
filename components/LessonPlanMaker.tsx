@@ -280,8 +280,18 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         });
       }
 
-      if (availableTeachers.length === 0 || availableStudents.length === 0) {
+      if (availableStudents.length === 0) {
+        // No students for this shift
         newPlan.set(shift.id, classes);
+        newSelfStudy.set(shift.id, []);
+        return;
+      }
+
+      if (availableTeachers.length === 0) {
+        // Students available but no teachers - all go to self study
+        console.log(`  📖 No teachers available - all ${availableStudents.length} students go to Self Study`);
+        newPlan.set(shift.id, classes);
+        newSelfStudy.set(shift.id, availableStudents);
         return;
       }
 
