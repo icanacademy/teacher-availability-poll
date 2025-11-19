@@ -536,7 +536,7 @@ app.get('/api/teachers-schedules', async (req, res) => {
     }
 
     const data = await response.json();
-    const teachers = data.results
+    const allTeachers = data.results
       .map((page) => {
         const properties = page.properties;
         return {
@@ -546,10 +546,20 @@ app.get('/api/teachers-schedules', async (req, res) => {
           endTime: properties['End Time']?.select?.name || '',
           status: properties['Status']?.select?.name || '',
         };
-      })
-      .filter(teacher => teacher.status === 'Active');
+      });
 
-    console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion`);
+    // Log teachers that will be filtered out
+    const filteredOut = allTeachers.filter(t => t.status !== 'Active');
+    if (filteredOut.length > 0) {
+      console.log(`⚠️ Teachers filtered out (not Active):`);
+      filteredOut.forEach(t => {
+        console.log(`   - ${t.name}: status="${t.status || '(empty)'}", schedule=${t.startTime || '?'} to ${t.endTime || '?'}`);
+      });
+    }
+
+    const teachers = allTeachers.filter(teacher => teacher.status === 'Active');
+
+    console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion (${filteredOut.length} filtered out)`);
     res.json(teachers);
   } catch (error) {
     console.error('Error fetching teachers schedules:', error);
