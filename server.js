@@ -516,6 +516,8 @@ app.get('/api/teachers-schedules', async (req, res) => {
       });
     }
 
+    // Use Notion's server-side filter for Active status (same as /api/teachers)
+    // This is critical because Notion pagination returns only first 100 results
     const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
       method: 'POST',
       headers: {
@@ -523,7 +525,14 @@ app.get('/api/teachers-schedules', async (req, res) => {
         'Notion-Version': '2022-06-28',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({})
+      body: JSON.stringify({
+        filter: {
+          property: 'Status',
+          select: {
+            equals: 'Active'
+          }
+        }
+      })
     });
 
     if (!response.ok) {
@@ -536,44 +545,17 @@ app.get('/api/teachers-schedules', async (req, res) => {
     }
 
     const data = await response.json();
-    const allTeachers = data.results
-      .map((page) => {
-        const properties = page.properties;
+    const teachers = data.results.map((page) => {
+      const properties = page.properties;
+      return {
+        id: page.id, // Use page.id to match /api/teachers endpoint
+        name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
+        startTime: properties['Start Time']?.select?.name || '',
+        endTime: properties['End Time']?.select?.name || '',
+      };
+    });
 
-        // Handle Status property (could be select, text, or other type)
-        let status = '';
-        const statusProp = properties['Status'];
-        if (statusProp) {
-          if (statusProp.select) {
-            status = statusProp.select.name || '';
-          } else if (statusProp.rich_text && statusProp.rich_text.length > 0) {
-            status = statusProp.rich_text[0].plain_text || '';
-          } else if (statusProp.title && statusProp.title.length > 0) {
-            status = statusProp.title[0].plain_text || '';
-          }
-        }
-
-        return {
-          id: page.id, // Use page.id to match /api/teachers endpoint
-          name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
-          startTime: properties['Start Time']?.select?.name || '',
-          endTime: properties['End Time']?.select?.name || '',
-          status: status,
-        };
-      });
-
-    // Log teachers that will be filtered out
-    const filteredOut = allTeachers.filter(t => (t.status || '').trim().toLowerCase() !== 'active');
-    if (filteredOut.length > 0) {
-      console.log(`⚠️ Teachers filtered out (not Active):`);
-      filteredOut.forEach(t => {
-        console.log(`   - ${t.name}: status="${t.status || '(empty)'}", schedule=${t.startTime || '?'} to ${t.endTime || '?'}`);
-      });
-    }
-
-    const teachers = allTeachers.filter(teacher => (teacher.status || '').trim().toLowerCase() === 'active');
-
-    console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion (${filteredOut.length} filtered out)`);
+    console.log(`✅ Successfully loaded ${teachers.length} active teachers from Notion (filtered by Notion API)`);
     res.json(teachers);
   } catch (error) {
     console.error('Error fetching teachers schedules:', error);
