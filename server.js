@@ -539,12 +539,26 @@ app.get('/api/teachers-schedules', async (req, res) => {
     const allTeachers = data.results
       .map((page) => {
         const properties = page.properties;
+
+        // Handle Status property (could be select, text, or other type)
+        let status = '';
+        const statusProp = properties['Status'];
+        if (statusProp) {
+          if (statusProp.select) {
+            status = statusProp.select.name || '';
+          } else if (statusProp.rich_text && statusProp.rich_text.length > 0) {
+            status = statusProp.rich_text[0].plain_text || '';
+          } else if (statusProp.title && statusProp.title.length > 0) {
+            status = statusProp.title[0].plain_text || '';
+          }
+        }
+
         return {
-          id: properties['Teacher ID']?.rich_text?.[0]?.plain_text || page.id,
+          id: page.id, // Use page.id to match /api/teachers endpoint
           name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
           startTime: properties['Start Time']?.select?.name || '',
           endTime: properties['End Time']?.select?.name || '',
-          status: properties['Status']?.select?.name || '',
+          status: status,
         };
       });
 
