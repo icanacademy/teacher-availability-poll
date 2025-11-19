@@ -336,7 +336,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         }
       });
 
-      // Step 2: Sort children by grade (this automatically minimizes spread when distributed)
+      // Step 2: Sort children by grade
       children.sort((a, b) => getGradeNum(a.grade) - getGradeNum(b.grade));
 
       console.log(`  📚 Children: ${children.length}, Adults: ${adults.length}`);
@@ -345,11 +345,46 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         console.log(`  📊 Children grades: ${grades.join(', ')}`);
       }
 
-      // Step 3: Allocate teachers to maximize student coverage (minimize self-study)
-      const MAX_GRADE_SPREAD = 5; // Maximum acceptable grade difference in one class
+      // Step 2.5: Find natural grade clusters (split where grade jumps by 3+)
+      const MAX_GRADE_GAP = 2; // Maximum gap within a cluster
+      const childClusters: Student[][] = [];
 
-      // Calculate MINIMUM classes needed for each group
-      const minClassesForChildren = children.length > 0 ? Math.ceil(children.length / MAX_CLASS_SIZE) : 0;
+      if (children.length > 0) {
+        let currentCluster: Student[] = [children[0]];
+
+        for (let i = 1; i < children.length; i++) {
+          const prevGrade = getGradeNum(children[i - 1].grade);
+          const currGrade = getGradeNum(children[i].grade);
+          const gap = currGrade - prevGrade;
+
+          if (gap > MAX_GRADE_GAP) {
+            // Big gap - start new cluster
+            childClusters.push(currentCluster);
+            currentCluster = [children[i]];
+          } else {
+            // Same cluster
+            currentCluster.push(children[i]);
+          }
+        }
+        // Don't forget the last cluster
+        if (currentCluster.length > 0) {
+          childClusters.push(currentCluster);
+        }
+      }
+
+      console.log(`  📊 Found ${childClusters.length} natural grade clusters`);
+      childClusters.forEach((cluster, i) => {
+        const grades = [...new Set(cluster.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
+        console.log(`    Cluster ${i + 1}: ${cluster.length} students, grades ${grades.join(', ')}`);
+      });
+
+      // Step 3: Allocate teachers to maximize student coverage (minimize self-study)
+
+      // Calculate MINIMUM classes needed - respecting natural clusters
+      let minClassesForChildren = 0;
+      childClusters.forEach(cluster => {
+        minClassesForChildren += Math.ceil(cluster.length / MAX_CLASS_SIZE);
+      });
       const minClassesForAdults = adults.length > 0 ? Math.ceil(adults.length / MAX_CLASS_SIZE) : 0;
       const totalMinClasses = minClassesForChildren + minClassesForAdults;
 
@@ -400,62 +435,51 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
       console.log(`  📋 Teacher allocation: ${teachersForChildren} for children, ${teachersForAdults} for adults`);
 
-      let numChildClasses = teachersForChildren;
-
       let teacherIdx = 0;
 
-      // Step 4: Distribute children efficiently
-      if (children.length > 0 && numChildClasses > 0) {
-        // Calculate base size and extras for even distribution
-        const baseSize = Math.floor(children.length / numChildClasses);
-        const extras = children.length % numChildClasses;
+      // Step 4: Distribute children by clusters (respecting natural grade groups)
+      if (childClusters.length > 0 && teachersForChildren > 0) {
+        // Calculate how many teachers each cluster needs
+        const clusterTeachers: number[] = childClusters.map(cluster =>
+          Math.ceil(cluster.length / MAX_CLASS_SIZE)
+        );
 
-        let studentIdx = 0;
-        for (let classNum = 0; classNum < numChildClasses && teacherIdx < numTeachers; classNum++) {
-          // Earlier classes get one extra student if there's remainder
-          const classSize = baseSize + (classNum < extras ? 1 : 0);
-          if (classSize === 0) continue;
+        // If we have extra teachers, distribute them to larger clusters
+        let totalAllocated = clusterTeachers.reduce((a, b) => a + b, 0);
+        let extraTeachers = teachersForChildren - totalAllocated;
 
-          const classStudents = children.slice(studentIdx, studentIdx + classSize);
-          studentIdx += classSize;
-
-          // Check grade spread
-          const grades = classStudents.map(s => getGradeNum(s.grade));
-          const spread = Math.max(...grades) - Math.min(...grades);
-
-          // If spread is too wide and we have extra teachers, split this class
-          if (spread > MAX_GRADE_SPREAD && teacherIdx + 1 < teachersForChildren && classStudents.length > 2) {
-            // Split into two smaller classes
-            const midpoint = Math.ceil(classStudents.length / 2);
-            const firstHalf = classStudents.slice(0, midpoint);
-            const secondHalf = classStudents.slice(midpoint);
-
-            // First class
-            const gradesFirst = [...new Set(firstHalf.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
-            classes.push({
-              teacher: availableTeachers[teacherIdx].teacher,
-              students: firstHalf,
-              shift: shift.label,
-              gradesMixed: gradesFirst,
-              teacherStatus: availableTeachers[teacherIdx].status,
-            });
-            teacherIdx++;
-
-            // Second class
-            if (secondHalf.length > 0 && teacherIdx < numTeachers) {
-              const gradesSecond = [...new Set(secondHalf.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
-              classes.push({
-                teacher: availableTeachers[teacherIdx].teacher,
-                students: secondHalf,
-                shift: shift.label,
-                gradesMixed: gradesSecond,
-                teacherStatus: availableTeachers[teacherIdx].status,
-              });
-              teacherIdx++;
+        while (extraTeachers > 0) {
+          // Give extra teacher to cluster with most students per teacher
+          let maxRatio = 0;
+          let maxIdx = 0;
+          for (let i = 0; i < childClusters.length; i++) {
+            const ratio = childClusters[i].length / clusterTeachers[i];
+            if (ratio > maxRatio) {
+              maxRatio = ratio;
+              maxIdx = i;
             }
-          } else {
-            // Normal case: create one class
-            const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
+          }
+          clusterTeachers[maxIdx]++;
+          extraTeachers--;
+        }
+
+        // Create classes for each cluster
+        childClusters.forEach((cluster, clusterIdx) => {
+          const numTeachersForCluster = clusterTeachers[clusterIdx];
+          const baseSize = Math.floor(cluster.length / numTeachersForCluster);
+          const extras = cluster.length % numTeachersForCluster;
+
+          let studentIdx = 0;
+          for (let i = 0; i < numTeachersForCluster && teacherIdx < numTeachers; i++) {
+            const classSize = baseSize + (i < extras ? 1 : 0);
+            if (classSize === 0) continue;
+
+            const classStudents = cluster.slice(studentIdx, studentIdx + classSize);
+            studentIdx += classSize;
+
+            const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) =>
+              getGradeNum(a) - getGradeNum(b)
+            );
 
             classes.push({
               teacher: availableTeachers[teacherIdx].teacher,
@@ -464,11 +488,12 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
               gradesMixed: gradesInClass,
               teacherStatus: availableTeachers[teacherIdx].status,
             });
+
             teacherIdx++;
           }
-        }
+        });
 
-        console.log(`  ✅ Created ${teacherIdx} classes for ${children.length} children (efficiency: ${(children.length / teacherIdx).toFixed(1)} students/teacher)`);
+        console.log(`  ✅ Created ${teacherIdx} classes for ${children.length} children across ${childClusters.length} clusters`);
       }
 
       // Step 5: Distribute adults to their allocated teachers
