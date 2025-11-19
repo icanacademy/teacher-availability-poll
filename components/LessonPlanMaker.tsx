@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Teacher, PollSubmission } from '../types';
 import { generateEmergencyLessonPlan, type GeneratedLessonPlan } from '../services/geminiService';
+import jsPDF from 'jspdf';
 
 interface TeacherSchedule {
   id: string;
@@ -518,6 +519,174 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     }
   };
 
+  // Download lesson plan as PDF
+  const downloadLessonPlanPDF = (classItem: ClassAssignment, plan: GeneratedLessonPlan) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - margin * 2;
+    let yPos = 20;
+
+    // Helper function to add text with word wrap
+    const addWrappedText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number = 7): number => {
+      const lines = doc.splitTextToSize(text, maxWidth);
+      doc.text(lines, x, y);
+      return y + lines.length * lineHeight;
+    };
+
+    // Helper to check and add new page if needed
+    const checkPageBreak = (requiredSpace: number): void => {
+      if (yPos + requiredSpace > 280) {
+        doc.addPage();
+        yPos = 20;
+      }
+    };
+
+    // Header
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ICAN Academy', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
+
+    doc.setFontSize(16);
+    doc.text('Emergency Lesson Plan', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 12;
+
+    // Date and Shift Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const today = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    doc.text(`Date: ${today}`, margin, yPos);
+    yPos += 6;
+    doc.text(`Shift: ${classItem.shift}`, margin, yPos);
+    yPos += 6;
+
+    const deliveryMode = classItem.teacherStatus.toUpperCase().includes('ONLINE') ? 'Online' : 'In-Person';
+    doc.text(`Delivery Mode: ${deliveryMode}`, margin, yPos);
+    yPos += 10;
+
+    // Teacher Info
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Teacher:', margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(classItem.teacher.name, margin + 25, yPos);
+    yPos += 10;
+
+    // Students List
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Students (${classItem.students.length}):`, margin, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    classItem.students.forEach((student, i) => {
+      checkPageBreak(6);
+      doc.text(`${i + 1}. ${student.name} (Grade ${student.grade})`, margin + 5, yPos);
+      yPos += 5;
+    });
+    yPos += 5;
+
+    // Lesson Plan Title
+    checkPageBreak(20);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    yPos = addWrappedText(plan.title, margin, yPos, contentWidth);
+    yPos += 3;
+
+    // Objective
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Objective:', margin, yPos);
+    yPos += 5;
+    doc.setFont('helvetica', 'normal');
+    yPos = addWrappedText(plan.objective, margin, yPos, contentWidth, 5);
+    yPos += 5;
+
+    // Materials
+    checkPageBreak(30);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Materials Needed:', margin, yPos);
+    yPos += 5;
+    doc.setFont('helvetica', 'normal');
+    plan.materials.forEach(material => {
+      checkPageBreak(5);
+      yPos = addWrappedText(`• ${material}`, margin + 3, yPos, contentWidth - 3, 5);
+    });
+    yPos += 5;
+
+    // Activities
+    const activities = [
+      { name: 'WARM UP', duration: plan.warmUp.duration, content: plan.warmUp.activity },
+      { name: 'MAIN ACTIVITY', duration: plan.mainActivity.duration, content: plan.mainActivity.activity, steps: plan.mainActivity.steps },
+      { name: 'PRACTICE', duration: plan.practiceActivity.duration, content: plan.practiceActivity.activity },
+      { name: 'COOL DOWN', duration: plan.coolDown.duration, content: plan.coolDown.activity },
+    ];
+
+    activities.forEach(activity => {
+      checkPageBreak(25);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${activity.name} (${activity.duration})`, margin, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      yPos = addWrappedText(activity.content, margin, yPos, contentWidth, 5);
+
+      if (activity.steps) {
+        yPos += 2;
+        activity.steps.forEach((step, i) => {
+          checkPageBreak(6);
+          yPos = addWrappedText(`${i + 1}. ${step}`, margin + 5, yPos, contentWidth - 5, 5);
+        });
+      }
+      yPos += 5;
+    });
+
+    // Adaptations
+    if (plan.adaptations.length > 0) {
+      checkPageBreak(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Adaptations:', margin, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      plan.adaptations.forEach(adaptation => {
+        checkPageBreak(6);
+        yPos = addWrappedText(`• ${adaptation}`, margin + 3, yPos, contentWidth - 3, 5);
+      });
+      yPos += 5;
+    }
+
+    // Emergency Notes
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Emergency Notes:', margin, yPos);
+    yPos += 5;
+    doc.setFont('helvetica', 'normal');
+    yPos = addWrappedText(plan.emergencyNotes, margin, yPos, contentWidth, 5);
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.text(
+        `Generated by NOAH's Ark - Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        290,
+        { align: 'center' }
+      );
+    }
+
+    // Save the PDF
+    const fileName = `LessonPlan_${classItem.teacher.name.replace(/\s+/g, '_')}_${classItem.shift.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+  };
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-8 text-center">
@@ -736,12 +905,21 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                                 <span>✨</span>
                                 AI-Generated Lesson Plan
                               </h5>
-                              <button
-                                onClick={() => generateAILessonPlan(activeTab, index, classItem)}
-                                className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
-                              >
-                                Regenerate
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => downloadLessonPlanPDF(classItem, generatedPlan)}
+                                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md flex items-center gap-1"
+                                >
+                                  <span>📄</span>
+                                  Download PDF
+                                </button>
+                                <button
+                                  onClick={() => generateAILessonPlan(activeTab, index, classItem)}
+                                  className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                                >
+                                  Regenerate
+                                </button>
+                              </div>
                             </div>
 
                             {/* Lesson Plan Title & Objective */}

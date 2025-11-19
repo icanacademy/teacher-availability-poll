@@ -761,6 +761,220 @@ app.get('/api/teachers-debug', async (req, res) => {
   }
 });
 
+// POST /api/lesson-plans - Save a lesson plan to Notion
+app.post('/api/lesson-plans', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_LESSON_PLANS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials or NOTION_LESSON_PLANS_DB_ID'
+      });
+    }
+
+    const {
+      date,
+      shift,
+      teacherName,
+      teacherId,
+      students, // Array of {name, grade}
+      lessonPlan, // The full GeneratedLessonPlan object
+      isOnline
+    } = req.body;
+
+    // Create a unique key for this lesson plan (teacher + shift + date)
+    const planKey = `${teacherId}-${shift}-${date}`;
+
+    // Format students as text
+    const studentsText = students.map((s, i) => `${i + 1}. ${s.name} (Grade ${s.grade})`).join('\n');
+
+    const response = await fetch('https://api.notion.com/v1/pages', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        parent: { database_id: databaseId },
+        properties: {
+          'Title': {
+            title: [{ text: { content: lessonPlan.title } }]
+          },
+          'Date': {
+            date: { start: date }
+          },
+          'Shift': {
+            select: { name: shift }
+          },
+          'Teacher Name': {
+            rich_text: [{ text: { content: teacherName } }]
+          },
+          'Teacher ID': {
+            rich_text: [{ text: { content: teacherId } }]
+          },
+          'Students': {
+            rich_text: [{ text: { content: studentsText } }]
+          },
+          'Student Count': {
+            number: students.length
+          },
+          'Delivery Mode': {
+            select: { name: isOnline ? 'Online' : 'In-Person' }
+          },
+          'Plan Key': {
+            rich_text: [{ text: { content: planKey } }]
+          },
+          'Lesson Plan JSON': {
+            rich_text: [{ text: { content: JSON.stringify(lessonPlan) } }]
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('Notion API error:', error);
+      return res.status(response.status).json({ error: error.message || 'Failed to save lesson plan' });
+    }
+
+    const data = await response.json();
+    res.json({ success: true, pageId: data.id, planKey });
+  } catch (error) {
+    console.error('Error saving lesson plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/lesson-plans - Get lesson plans for a specific date
+app.get('/api/lesson-plans', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_LESSON_PLANS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials or NOTION_LESSON_PLANS_DB_ID'
+      });
+    }
+
+    const { date } = req.query;
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filter: {
+          property: 'Date',
+          date: {
+            equals: targetDate
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('Notion API error:', error);
+      return res.status(response.status).json({ error: error.message || 'Failed to fetch lesson plans' });
+    }
+
+    const data = await response.json();
+
+    // Parse the results into a more usable format
+    const lessonPlans = data.results.map(page => {
+      const props = page.properties;
+      return {
+        id: page.id,
+        title: props['Title']?.title?.[0]?.plain_text || '',
+        date: props['Date']?.date?.start || '',
+        shift: props['Shift']?.select?.name || '',
+        teacherName: props['Teacher Name']?.rich_text?.[0]?.plain_text || '',
+        teacherId: props['Teacher ID']?.rich_text?.[0]?.plain_text || '',
+        studentCount: props['Student Count']?.number || 0,
+        deliveryMode: props['Delivery Mode']?.select?.name || '',
+        planKey: props['Plan Key']?.rich_text?.[0]?.plain_text || '',
+        lessonPlan: JSON.parse(props['Lesson Plan JSON']?.rich_text?.[0]?.plain_text || '{}')
+      };
+    });
+
+    res.json(lessonPlans);
+  } catch (error) {
+    console.error('Error fetching lesson plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/lesson-plans/:planKey - Get a specific lesson plan by its key
+app.get('/api/lesson-plans/:planKey', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_LESSON_PLANS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({
+        error: 'Server configuration error: Missing Notion credentials or NOTION_LESSON_PLANS_DB_ID'
+      });
+    }
+
+    const { planKey } = req.params;
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filter: {
+          property: 'Plan Key',
+          rich_text: {
+            equals: planKey
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return res.status(response.status).json({ error: error.message });
+    }
+
+    const data = await response.json();
+
+    if (data.results.length === 0) {
+      return res.status(404).json({ error: 'Lesson plan not found' });
+    }
+
+    // Return the most recent one if there are multiple
+    const page = data.results[0];
+    const props = page.properties;
+
+    res.json({
+      id: page.id,
+      title: props['Title']?.title?.[0]?.plain_text || '',
+      date: props['Date']?.date?.start || '',
+      shift: props['Shift']?.select?.name || '',
+      teacherName: props['Teacher Name']?.rich_text?.[0]?.plain_text || '',
+      teacherId: props['Teacher ID']?.rich_text?.[0]?.plain_text || '',
+      studentCount: props['Student Count']?.number || 0,
+      deliveryMode: props['Delivery Mode']?.select?.name || '',
+      planKey: props['Plan Key']?.rich_text?.[0]?.plain_text || '',
+      lessonPlan: JSON.parse(props['Lesson Plan JSON']?.rich_text?.[0]?.plain_text || '{}')
+    });
+  } catch (error) {
+    console.error('Error fetching lesson plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📡 Network: http://192.168.68.153:${PORT}`);
@@ -768,5 +982,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`👨‍🏫 Teachers Schedules API available at http://localhost:${PORT}/api/teachers-schedules`);
   console.log(`👦 Students API available at http://localhost:${PORT}/api/students`);
   console.log(`📝 Submissions API available at http://localhost:${PORT}/api/submissions`);
+  console.log(`📖 Lesson Plans API available at http://localhost:${PORT}/api/lesson-plans`);
   console.log(`🔧 Migration endpoint available at http://localhost:${PORT}/api/migrate-submissions (POST)`);
 });
