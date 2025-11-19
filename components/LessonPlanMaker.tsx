@@ -301,12 +301,29 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       const numStudents = availableStudents.length;
       const maxCapacity = numTeachers * MAX_CLASS_SIZE;
 
-      // Sort students by grade ASCENDING - younger students get teachers first
-      // Older students (who can study independently) go to self-study if needed
+      // Sort students to prioritize CHILDREN over ADULTS
+      // Children (grades 1-12) get teachers first, adults go to self-study when over capacity
       const sortedStudents = [...availableStudents].sort((a, b) => {
-        const gradeA = parseInt(a.grade) || 0;
-        const gradeB = parseInt(b.grade) || 0;
-        return gradeA - gradeB; // Younger first
+        const gradeA = a.grade?.toLowerCase().trim() || '';
+        const gradeB = b.grade?.toLowerCase().trim() || '';
+
+        // Check if grade is adult/university/empty (should be last priority)
+        const isAdultA = gradeA === 'adult' || gradeA === 'university' || gradeA === '' || gradeA === '0';
+        const isAdultB = gradeB === 'adult' || gradeB === 'university' || gradeB === '' || gradeB === '0';
+
+        // Children first, adults last
+        if (isAdultA && !isAdultB) return 1;  // A is adult, B is child -> B first
+        if (!isAdultA && isAdultB) return -1; // A is child, B is adult -> A first
+
+        // If both children, sort by grade (younger first)
+        if (!isAdultA && !isAdultB) {
+          const numA = parseInt(gradeA) || 0;
+          const numB = parseInt(gradeB) || 0;
+          return numA - numB;
+        }
+
+        // If both adults, keep original order
+        return 0;
       });
 
       // Students to assign (up to capacity), self-study for the rest (older ones)
