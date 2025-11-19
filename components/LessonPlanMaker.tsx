@@ -313,7 +313,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       // Helper function to get grade band (group similar grades together)
       const getGradeBand = (grade: string): string => {
         const g = grade?.toLowerCase().trim() || '';
+
+        // Adults go to their own band
         if (g === 'adult' || g === 'university' || g === '' || g === '0') return 'adults';
+
+        // Kindergarten/Kinder goes with young children
+        if (g === 'kindergarten' || g === 'kinder' || g === 'k' || g === 'pre-k' || g === 'prek') return 'kinder';
+
         const num = parseInt(g) || 0;
         if (num >= 1 && num <= 3) return 'lower'; // Grades 1-3
         if (num >= 4 && num <= 6) return 'upper'; // Grades 4-6
@@ -324,7 +330,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
       // Group students by grade band
       const gradeBands = new Map<string, Student[]>();
-      const bandOrder = ['lower', 'upper', 'middle', 'high', 'adults'];
+      const bandOrder = ['kinder', 'lower', 'upper', 'middle', 'high', 'adults'];
       bandOrder.forEach(band => gradeBands.set(band, []));
 
       availableStudents.forEach(student => {
@@ -353,16 +359,23 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
       // Each teacher gets up to MAX_CLASS_SIZE students from similar grades
 
       // Flatten all children into sorted list (by grade)
+      // Kinder goes first, then lower grades through high
       const allChildren: Student[] = [];
-      ['lower', 'upper', 'middle', 'high'].forEach(band => {
+      ['kinder', 'lower', 'upper', 'middle', 'high'].forEach(band => {
         allChildren.push(...gradeBands.get(band)!);
       });
       const adultStudents = gradeBands.get('adults')!;
 
-      // Sort children by grade number
+      // Sort children by grade number (kindergarten = 0, then 1-12)
+      const getGradeNum = (grade: string): number => {
+        const g = grade?.toLowerCase().trim() || '';
+        if (g === 'kindergarten' || g === 'kinder' || g === 'k' || g === 'pre-k' || g === 'prek') return 0;
+        return parseInt(grade) || 0;
+      };
+
       allChildren.sort((a, b) => {
-        const numA = parseInt(a.grade) || 0;
-        const numB = parseInt(b.grade) || 0;
+        const numA = getGradeNum(a.grade);
+        const numB = getGradeNum(b.grade);
         return numA - numB;
       });
 
