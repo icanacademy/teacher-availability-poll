@@ -827,7 +827,19 @@ app.post('/api/lesson-plans', async (req, res) => {
             rich_text: [{ text: { content: planKey } }]
           },
           'Lesson Plan JSON': {
-            rich_text: [{ text: { content: JSON.stringify(lessonPlan) } }]
+            // Notion has 2000 char limit per text block, so we truncate if needed
+            rich_text: (() => {
+              const fullJson = JSON.stringify(lessonPlan);
+              if (fullJson.length <= 2000) {
+                return [{ text: { content: fullJson } }];
+              }
+              // Split into multiple text blocks of 2000 chars each
+              const blocks = [];
+              for (let i = 0; i < fullJson.length; i += 2000) {
+                blocks.push({ text: { content: fullJson.slice(i, i + 2000) } });
+              }
+              return blocks;
+            })()
           }
         }
       })
