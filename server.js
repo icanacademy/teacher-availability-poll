@@ -783,8 +783,16 @@ app.post('/api/lesson-plans', async (req, res) => {
       isOnline
     } = req.body;
 
+    // Validate required fields
+    if (!date || !shift || !teacherName || !teacherId || !students || !lessonPlan) {
+      console.error('Missing required fields:', { date, shift, teacherName, teacherId, students: !!students, lessonPlan: !!lessonPlan });
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     // Create a unique key for this lesson plan (teacher + shift + date)
     const planKey = `${teacherId}-${shift}-${date}`;
+
+    console.log('Saving lesson plan:', { planKey, teacherName, studentCount: students.length, shift, date });
 
     // Format students as text
     const studentsText = students.map((s, i) => `${i + 1}. ${s.name} (Grade ${s.grade})`).join('\n');
