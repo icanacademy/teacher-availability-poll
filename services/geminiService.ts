@@ -377,14 +377,68 @@ const generateEmergencyLessonPlan = async (request: LessonPlanRequest): Promise<
 
     const deliveryMode = request.isOnline ? 'ONLINE (virtual classroom)' : 'IN-PERSON';
 
+    // Determine age group and language level based on grades
+    const getAgeAndLevel = (grades: string[]): { ageGroup: string; languageLevel: string; interests: string } => {
+        const numericGrades = grades.map(g => parseInt(g) || 0).filter(g => g > 0);
+        const hasAdults = grades.some(g => g.toLowerCase() === 'adult' || g.toLowerCase() === 'university');
+
+        if (hasAdults || numericGrades.length === 0) {
+            return {
+                ageGroup: 'Adults (18+)',
+                languageLevel: 'Intermediate to Advanced',
+                interests: 'career, travel, current events, practical life skills'
+            };
+        }
+
+        const avgGrade = numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length;
+
+        if (avgGrade <= 3) {
+            return {
+                ageGroup: 'Young children (6-9 years old)',
+                languageLevel: 'Beginner - focus on basic vocabulary, simple sentences, and phonics',
+                interests: 'animals, colors, family, toys, games, songs, stories'
+            };
+        } else if (avgGrade <= 6) {
+            return {
+                ageGroup: 'Children (10-12 years old)',
+                languageLevel: 'Elementary - focus on building vocabulary, basic grammar, reading short texts',
+                interests: 'sports, hobbies, friends, school life, cartoons, simple stories'
+            };
+        } else if (avgGrade <= 9) {
+            return {
+                ageGroup: 'Teenagers (13-15 years old)',
+                languageLevel: 'Pre-Intermediate - focus on conversation, grammar structures, reading comprehension',
+                interests: 'social media, music, movies, technology, games, peer relationships'
+            };
+        } else {
+            return {
+                ageGroup: 'Older teenagers (16-18 years old)',
+                languageLevel: 'Intermediate - focus on fluency, complex grammar, academic writing',
+                interests: 'future careers, university, social issues, entertainment, independence'
+            };
+        }
+    };
+
+    const { ageGroup, languageLevel, interests } = getAgeAndLevel(request.grades);
+
     const prompt = `
         You are an experienced ESL/English language teacher creating an EMERGENCY lesson plan for ${request.teacherName}'s class.
 
         **Class Details:**
         - Grade Levels: ${gradeDescription}
+        - Age Group: ${ageGroup}
+        - Language Level: ${languageLevel}
         - Number of Students: ${request.numStudents}
         - Duration: 2 hours (${request.shiftDuration})
         - Delivery Mode: ${deliveryMode}
+
+        **CRITICAL - Age-Appropriate Content:**
+        - Topics and vocabulary MUST be appropriate for ${ageGroup}
+        - Use themes related to: ${interests}
+        - Language complexity should match ${languageLevel}
+        - For young children: use lots of visuals, songs, TPR (Total Physical Response), games
+        - For teenagers: use relatable topics, group discussions, technology-friendly activities
+        - For adults: use practical real-world scenarios, professional contexts
 
         **Important Context:**
         - This is an EMERGENCY class - the teacher may not have prepared materials
