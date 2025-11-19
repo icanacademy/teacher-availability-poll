@@ -295,26 +295,43 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         return;
       }
 
-      // Calculate optimal distribution: spread students across all teachers
+      // Calculate distribution with max 5 students per teacher
+      const MAX_CLASS_SIZE = 5;
       const numTeachers = availableTeachers.length;
       const numStudents = availableStudents.length;
-      const baseClassSize = Math.floor(numStudents / numTeachers);
-      const extraStudents = numStudents % numTeachers;
+      const maxCapacity = numTeachers * MAX_CLASS_SIZE;
 
-      console.log(`  📊 Distribution: ${numStudents} students / ${numTeachers} teachers = ~${baseClassSize} each`);
+      // Sort students by grade ASCENDING - younger students get teachers first
+      // Older students (who can study independently) go to self-study if needed
+      const sortedStudents = [...availableStudents].sort((a, b) => {
+        const gradeA = parseInt(a.grade) || 0;
+        const gradeB = parseInt(b.grade) || 0;
+        return gradeA - gradeB; // Younger first
+      });
 
-      // Sort students by grade to keep same grades together when possible
-      const sortedStudents = [...availableStudents].sort((a, b) => a.grade.localeCompare(b.grade));
+      // Students to assign (up to capacity), self-study for the rest (older ones)
+      const studentsToAssign = sortedStudents.slice(0, Math.min(numStudents, maxCapacity));
+      const selfStudyList = sortedStudents.slice(maxCapacity); // Older students
+
+      if (selfStudyList.length > 0) {
+        console.log(`  📖 ${selfStudyList.length} older students go to Self Study (max capacity: ${maxCapacity})`);
+      }
+
+      // Calculate even distribution
+      const baseClassSize = Math.floor(studentsToAssign.length / numTeachers);
+      const extraStudents = studentsToAssign.length % numTeachers;
+
+      console.log(`  📊 Distribution: ${studentsToAssign.length} students / ${numTeachers} teachers = ~${baseClassSize} each`);
 
       // Distribute students evenly across all teachers
       let studentIndex = 0;
-      for (let i = 0; i < numTeachers && studentIndex < numStudents; i++) {
+      for (let i = 0; i < numTeachers && studentIndex < studentsToAssign.length; i++) {
         // Some teachers get one extra student to handle remainder
         const classSize = baseClassSize + (i < extraStudents ? 1 : 0);
 
         if (classSize === 0) continue;
 
-        const classStudents = sortedStudents.slice(studentIndex, studentIndex + classSize);
+        const classStudents = studentsToAssign.slice(studentIndex, studentIndex + classSize);
         studentIndex += classSize;
 
         // Determine grades in this class
