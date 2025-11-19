@@ -717,6 +717,15 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     const contentWidth = pageWidth - margin * 2;
     let yPos = 20;
 
+    // Helper to strip Korean/non-Latin characters (jsPDF default font doesn't support them)
+    const stripNonLatin = (text: string): string => {
+      // Remove Korean characters in brackets [한글] and any other non-Latin chars
+      return text
+        .replace(/\s*\[[^\]]*[\u3131-\uD79D][^\]]*\]/g, '') // Remove [Korean text]
+        .replace(/[\u3131-\uD79D]/g, '') // Remove any remaining Korean chars
+        .trim();
+    };
+
     // Helper function to add text with word wrap
     const addWrappedText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number = 7): number => {
       const lines = doc.splitTextToSize(text, maxWidth);
@@ -765,7 +774,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     doc.setFont('helvetica', 'bold');
     doc.text('Teacher:', margin, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(classItem.teacher.name, margin + 25, yPos);
+    doc.text(stripNonLatin(classItem.teacher.name), margin + 25, yPos);
     yPos += 10;
 
     // Students List
@@ -777,7 +786,7 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
     classItem.students.forEach((student, i) => {
       checkPageBreak(6);
-      doc.text(`${i + 1}. ${student.name} (Grade ${student.grade})`, margin + 5, yPos);
+      doc.text(`${i + 1}. ${stripNonLatin(student.name)} (Grade ${student.grade})`, margin + 5, yPos);
       yPos += 5;
     });
     yPos += 5;
