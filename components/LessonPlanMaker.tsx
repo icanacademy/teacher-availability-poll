@@ -318,95 +318,102 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         return parseInt(g) || 99;
       };
 
-      // Helper function to get TIGHT grade bands (2-grade spans for better grouping)
-      const getGradeBand = (grade: string): string => {
-        const num = getGradeNum(grade);
-        if (num === 99) return 'adults';
-        if (num === 0) return 'kinder';      // Kindergarten alone
-        if (num <= 2) return 'g1-2';         // Grades 1-2
-        if (num <= 4) return 'g3-4';         // Grades 3-4
-        if (num <= 6) return 'g5-6';         // Grades 5-6
-        if (num <= 8) return 'g7-8';         // Grades 7-8
-        if (num <= 10) return 'g9-10';       // Grades 9-10
-        return 'g11-12';                     // Grades 11-12
-      };
+      // EFFICIENCY-FIRST ALGORITHM
+      // Priority 1: Never mix children with adults
+      // Priority 2: Fill classes to capacity (5 students) = maximize teacher efficiency
+      // Priority 3: Minimize grade spread within filled classes
+      // Priority 4: Only split if grade spread > 5 grades
 
-      // Group students by tight grade bands
-      const gradeBands = new Map<string, Student[]>();
-      const bandOrder = ['kinder', 'g1-2', 'g3-4', 'g5-6', 'g7-8', 'g9-10', 'g11-12', 'adults'];
-      bandOrder.forEach(band => gradeBands.set(band, []));
+      // Step 1: Separate adults from children
+      const children: Student[] = [];
+      const adults: Student[] = [];
 
       availableStudents.forEach(student => {
-        const band = getGradeBand(student.grade);
-        gradeBands.get(band)!.push(student);
-      });
-
-      // Sort students within each band by grade
-      gradeBands.forEach((students, band) => {
-        students.sort((a, b) => {
-          const numA = parseInt(a.grade) || 0;
-          const numB = parseInt(b.grade) || 0;
-          return numA - numB;
-        });
-      });
-
-      console.log(`  📊 Grade bands:`);
-      bandOrder.forEach(band => {
-        const students = gradeBands.get(band)!;
-        if (students.length > 0) {
-          console.log(`    - ${band}: ${students.length} students`);
+        if (getGradeNum(student.grade) === 99) {
+          adults.push(student);
+        } else {
+          children.push(student);
         }
       });
 
-      // SMART DISTRIBUTION: Keep students in tight grade bands
-      // Only merge adjacent bands when absolutely necessary
+      // Step 2: Sort children by grade (this automatically minimizes spread when distributed)
+      children.sort((a, b) => getGradeNum(a.grade) - getGradeNum(b.grade));
 
-      // Separate children (non-adults) from adults
-      const childBands = ['kinder', 'g1-2', 'g3-4', 'g5-6', 'g7-8', 'g9-10', 'g11-12'];
-      const adultStudents = gradeBands.get('adults')!;
+      console.log(`  📚 Children: ${children.length}, Adults: ${adults.length}`);
+      if (children.length > 0) {
+        const grades = children.map(s => s.grade);
+        console.log(`  📊 Children grades: ${grades.join(', ')}`);
+      }
 
-      // Count total children and identify non-empty bands
-      let totalChildren = 0;
-      const nonEmptyBands: { band: string; students: Student[] }[] = [];
-      childBands.forEach(band => {
-        const students = gradeBands.get(band)!;
-        totalChildren += students.length;
-        if (students.length > 0) {
-          nonEmptyBands.push({ band, students: [...students] });
-        }
-      });
+      // Step 3: Calculate minimum classes needed for efficiency
+      const MAX_GRADE_SPREAD = 5; // Maximum acceptable grade difference in one class
 
-      console.log(`  📚 Total children: ${totalChildren}, Adults: ${adultStudents.length}`);
-      console.log(`  📊 Non-empty bands: ${nonEmptyBands.map(b => b.band).join(', ')}`);
+      // Calculate ideal number of classes for children
+      let minClassesForChildren = children.length > 0 ? Math.ceil(children.length / MAX_CLASS_SIZE) : 0;
 
-      // Calculate how many teachers we need for children
-      const teachersForChildren = Math.min(
-        totalChildren > 0 ? Math.ceil(totalChildren / MAX_CLASS_SIZE) : 0,
-        numTeachers - (adultStudents.length > 0 ? 1 : 0) // Leave at least 1 for adults if needed
-      );
-      const teachersForAdults = numTeachers - teachersForChildren;
+      // Reserve teachers for adults if needed
+      const classesForAdults = adults.length > 0 ? Math.ceil(adults.length / MAX_CLASS_SIZE) : 0;
+
+      // Total teachers we can use
+      const availableForChildren = Math.max(0, numTeachers - classesForAdults);
+
+      // Use minimum of what we need and what's available
+      let numChildClasses = Math.min(minClassesForChildren, availableForChildren);
 
       let teacherIdx = 0;
 
-      // SMART ALGORITHM:
-      // 1. If we have enough teachers, give each band its own teacher(s)
-      // 2. If not, merge adjacent bands starting from smallest
+      // Step 4: Distribute children efficiently
+      if (children.length > 0 && numChildClasses > 0) {
+        // Calculate base size and extras for even distribution
+        const baseSize = Math.floor(children.length / numChildClasses);
+        const extras = children.length % numChildClasses;
 
-      if (nonEmptyBands.length <= teachersForChildren) {
-        // GOOD CASE: We have enough teachers - assign each band separately
-        console.log(`  ✅ Enough teachers (${teachersForChildren}) for bands (${nonEmptyBands.length})`);
+        let studentIdx = 0;
+        for (let classNum = 0; classNum < numChildClasses && teacherIdx < numTeachers; classNum++) {
+          // Earlier classes get one extra student if there's remainder
+          const classSize = baseSize + (classNum < extras ? 1 : 0);
+          if (classSize === 0) continue;
 
-        nonEmptyBands.forEach(({ band, students }) => {
-          // Sort students within this band
-          students.sort((a, b) => getGradeNum(a.grade) - getGradeNum(b.grade));
+          const classStudents = children.slice(studentIdx, studentIdx + classSize);
+          studentIdx += classSize;
 
-          // Create class(es) for this band
-          while (students.length > 0 && teacherIdx < teachersForChildren) {
-            const classStudents = students.splice(0, MAX_CLASS_SIZE);
+          // Check grade spread
+          const grades = classStudents.map(s => getGradeNum(s.grade));
+          const spread = Math.max(...grades) - Math.min(...grades);
 
-            const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => {
-              return getGradeNum(a) - getGradeNum(b);
+          // If spread is too wide and we have extra teachers, split this class
+          if (spread > MAX_GRADE_SPREAD && teacherIdx + 1 < availableForChildren && classStudents.length > 2) {
+            // Split into two smaller classes
+            const midpoint = Math.ceil(classStudents.length / 2);
+            const firstHalf = classStudents.slice(0, midpoint);
+            const secondHalf = classStudents.slice(midpoint);
+
+            // First class
+            const gradesFirst = [...new Set(firstHalf.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
+            classes.push({
+              teacher: availableTeachers[teacherIdx].teacher,
+              students: firstHalf,
+              shift: shift.label,
+              gradesMixed: gradesFirst,
+              teacherStatus: availableTeachers[teacherIdx].status,
             });
+            teacherIdx++;
+
+            // Second class
+            if (secondHalf.length > 0 && teacherIdx < numTeachers) {
+              const gradesSecond = [...new Set(secondHalf.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
+              classes.push({
+                teacher: availableTeachers[teacherIdx].teacher,
+                students: secondHalf,
+                shift: shift.label,
+                gradesMixed: gradesSecond,
+                teacherStatus: availableTeachers[teacherIdx].status,
+              });
+              teacherIdx++;
+            }
+          } else {
+            // Normal case: create one class
+            const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => getGradeNum(a) - getGradeNum(b));
 
             classes.push({
               teacher: availableTeachers[teacherIdx].teacher,
@@ -415,68 +422,21 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
               gradesMixed: gradesInClass,
               teacherStatus: availableTeachers[teacherIdx].status,
             });
-
             teacherIdx++;
           }
-        });
-      } else {
-        // LIMITED TEACHERS: Must merge bands strategically
-        console.log(`  ⚠️ Limited teachers (${teachersForChildren}) for bands (${nonEmptyBands.length}) - merging adjacent`);
-
-        // Merge adjacent bands until we have the right number
-        while (nonEmptyBands.length > teachersForChildren && nonEmptyBands.length > 1) {
-          // Find two adjacent bands with smallest combined count to merge
-          let minCombined = Infinity;
-          let mergeIdx = 0;
-
-          for (let i = 0; i < nonEmptyBands.length - 1; i++) {
-            const combined = nonEmptyBands[i].students.length + nonEmptyBands[i + 1].students.length;
-            if (combined < minCombined) {
-              minCombined = combined;
-              mergeIdx = i;
-            }
-          }
-
-          // Merge bands at mergeIdx and mergeIdx+1
-          nonEmptyBands[mergeIdx].students.push(...nonEmptyBands[mergeIdx + 1].students);
-          nonEmptyBands[mergeIdx].band = `${nonEmptyBands[mergeIdx].band}+${nonEmptyBands[mergeIdx + 1].band}`;
-          nonEmptyBands.splice(mergeIdx + 1, 1);
         }
 
-        // Now assign merged bands to teachers
-        nonEmptyBands.forEach(({ band, students }) => {
-          // Sort students by grade
-          students.sort((a, b) => getGradeNum(a.grade) - getGradeNum(b.grade));
-
-          // Create class(es)
-          while (students.length > 0 && teacherIdx < teachersForChildren) {
-            const classStudents = students.splice(0, MAX_CLASS_SIZE);
-
-            const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => {
-              return getGradeNum(a) - getGradeNum(b);
-            });
-
-            classes.push({
-              teacher: availableTeachers[teacherIdx].teacher,
-              students: classStudents,
-              shift: shift.label,
-              gradesMixed: gradesInClass,
-              teacherStatus: availableTeachers[teacherIdx].status,
-            });
-
-            teacherIdx++;
-          }
-        });
+        console.log(`  ✅ Created ${teacherIdx} classes for ${children.length} children (efficiency: ${(children.length / teacherIdx).toFixed(1)} students/teacher)`);
       }
 
-      // Distribute adults to remaining teachers
-      if (adultStudents.length > 0 && teacherIdx < numTeachers) {
+      // Step 5: Distribute adults to remaining teachers
+      if (adults.length > 0 && teacherIdx < numTeachers) {
         const remainingTeachers = numTeachers - teacherIdx;
-        const adultsPerTeacher = Math.ceil(adultStudents.length / remainingTeachers);
+        const adultsPerClass = Math.ceil(adults.length / Math.min(remainingTeachers, classesForAdults));
 
         let adultIdx = 0;
-        while (adultIdx < adultStudents.length && teacherIdx < numTeachers) {
-          const classStudents = adultStudents.slice(adultIdx, adultIdx + Math.min(adultsPerTeacher, MAX_CLASS_SIZE));
+        while (adultIdx < adults.length && teacherIdx < numTeachers) {
+          const classStudents = adults.slice(adultIdx, adultIdx + Math.min(adultsPerClass, MAX_CLASS_SIZE));
           adultIdx += classStudents.length;
 
           const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
@@ -491,6 +451,8 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
           teacherIdx++;
         }
+
+        console.log(`  ✅ Created ${numTeachers - (teacherIdx - classesForAdults)} classes for ${adults.length} adults`);
       }
 
       console.log(`  Classes created: ${classes.length}`);
