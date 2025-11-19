@@ -340,32 +340,44 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         }
       });
 
-      // Distribute teachers to bands based on student count (children first)
-      let teacherIndex = 0;
-      const childBands = ['lower', 'upper', 'middle', 'high'];
+      // SMARTER DISTRIBUTION: Fill classes by taking from closest grade bands
+      // Each teacher gets up to MAX_CLASS_SIZE students from similar grades
 
-      // First pass: assign children to teachers
-      childBands.forEach(band => {
-        const students = gradeBands.get(band)!;
-        if (students.length === 0 || teacherIndex >= numTeachers) return;
+      // Flatten all children into sorted list (by grade)
+      const allChildren: Student[] = [];
+      ['lower', 'upper', 'middle', 'high'].forEach(band => {
+        allChildren.push(...gradeBands.get(band)!);
+      });
+      const adultStudents = gradeBands.get('adults')!;
 
-        // Calculate how many teachers this band needs
-        const teachersNeeded = Math.ceil(students.length / MAX_CLASS_SIZE);
-        const teachersAvailable = numTeachers - teacherIndex;
-        const teachersForBand = Math.min(teachersNeeded, teachersAvailable);
+      // Sort children by grade number
+      allChildren.sort((a, b) => {
+        const numA = parseInt(a.grade) || 0;
+        const numB = parseInt(b.grade) || 0;
+        return numA - numB;
+      });
 
-        if (teachersForBand === 0) return;
+      console.log(`  📚 Total children: ${allChildren.length}, Adults: ${adultStudents.length}`);
 
-        // Distribute students in this band evenly across allocated teachers
-        const baseSize = Math.floor(students.length / teachersForBand);
-        const extra = students.length % teachersForBand;
+      // Calculate how many children can be assigned (children get priority)
+      const childrenCapacity = Math.min(allChildren.length, numTeachers * MAX_CLASS_SIZE);
+      const childrenToAssign = allChildren.slice(0, childrenCapacity);
+
+      // Remaining adults get leftover teacher capacity
+      const teachersForChildren = Math.ceil(childrenToAssign.length / MAX_CLASS_SIZE);
+      const teachersForAdults = numTeachers - teachersForChildren;
+
+      // Distribute children across their allocated teachers
+      if (childrenToAssign.length > 0 && teachersForChildren > 0) {
+        const baseSize = Math.floor(childrenToAssign.length / teachersForChildren);
+        const extra = childrenToAssign.length % teachersForChildren;
 
         let studentIdx = 0;
-        for (let i = 0; i < teachersForBand && studentIdx < students.length; i++) {
+        for (let i = 0; i < teachersForChildren && studentIdx < childrenToAssign.length; i++) {
           const classSize = Math.min(baseSize + (i < extra ? 1 : 0), MAX_CLASS_SIZE);
           if (classSize === 0) continue;
 
-          const classStudents = students.slice(studentIdx, studentIdx + classSize);
+          const classStudents = childrenToAssign.slice(studentIdx, studentIdx + classSize);
           studentIdx += classSize;
 
           const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort((a, b) => {
@@ -373,31 +385,23 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           });
 
           classes.push({
-            teacher: availableTeachers[teacherIndex].teacher,
+            teacher: availableTeachers[i].teacher,
             students: classStudents,
             shift: shift.label,
             gradesMixed: gradesInClass,
-            teacherStatus: availableTeachers[teacherIndex].status,
+            teacherStatus: availableTeachers[i].status,
           });
-
-          teacherIndex++;
         }
+      }
 
-        // Any remaining students in this band go to overflow
-        if (studentIdx < students.length) {
-          console.log(`  ⚠️ ${students.length - studentIdx} students from ${band} band overflow`);
-        }
-      });
-
-      // Second pass: if teachers remain, assign adults
-      const adultStudents = gradeBands.get('adults')!;
-      if (adultStudents.length > 0 && teacherIndex < numTeachers) {
-        const teachersForAdults = numTeachers - teacherIndex;
+      // Distribute adults to remaining teachers
+      if (adultStudents.length > 0 && teachersForAdults > 0) {
         const baseSize = Math.floor(adultStudents.length / teachersForAdults);
         const extra = adultStudents.length % teachersForAdults;
 
         let studentIdx = 0;
         for (let i = 0; i < teachersForAdults && studentIdx < adultStudents.length; i++) {
+          const teacherIdx = teachersForChildren + i;
           const classSize = Math.min(baseSize + (i < extra ? 1 : 0), MAX_CLASS_SIZE);
           if (classSize === 0) continue;
 
@@ -407,14 +411,12 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
           const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
 
           classes.push({
-            teacher: availableTeachers[teacherIndex].teacher,
+            teacher: availableTeachers[teacherIdx].teacher,
             students: classStudents,
             shift: shift.label,
             gradesMixed: gradesInClass,
-            teacherStatus: availableTeachers[teacherIndex].status,
+            teacherStatus: availableTeachers[teacherIdx].status,
           });
-
-          teacherIndex++;
         }
       }
 
