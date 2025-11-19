@@ -356,16 +356,16 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         cls.students.forEach(s => assignedStudents.add(s.id));
       });
 
-      const unassignedStudents = availableStudents.filter(s => !assignedStudents.has(s.id));
+      const remainingUnassigned = availableStudents.filter(s => !assignedStudents.has(s.id));
 
       console.log(`  📊 Summary:`);
       console.log(`    - Total students available: ${availableStudents.length}`);
       console.log(`    - Students assigned: ${assignedStudents.size}`);
-      console.log(`    - Students WITHOUT teachers: ${unassignedStudents.length}`);
+      console.log(`    - Students WITHOUT teachers: ${remainingUnassigned.length}`);
 
-      if (unassignedStudents.length > 0) {
+      if (remainingUnassigned.length > 0) {
         console.log(`  ⚠️ Unassigned students (no teacher available):`);
-        unassignedStudents.forEach(s => {
+        remainingUnassigned.forEach(s => {
           console.log(`    - ${s.name} (Grade ${s.grade})`);
         });
       }
