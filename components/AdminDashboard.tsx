@@ -211,7 +211,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ submissions, teachers, 
   const [overallSummary, setOverallSummary] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'all'>('all');
+  const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'all'>('today');
   const [customDate, setCustomDate] = useState<string>('');
   const [viewMode, setViewMode] = useState<'latest' | 'all' | 'not-submitted'>('latest');
 
