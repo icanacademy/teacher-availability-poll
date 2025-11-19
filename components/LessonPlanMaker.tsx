@@ -295,69 +295,38 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
         return;
       }
 
-      // Group students by grade
-      const gradeGroups = groupStudentsByGrade(availableStudents);
-      const sortedGrades = Array.from(gradeGroups.keys()).sort();
+      // Calculate optimal distribution: spread students across all teachers
+      const numTeachers = availableTeachers.length;
+      const numStudents = availableStudents.length;
+      const baseClassSize = Math.floor(numStudents / numTeachers);
+      const extraStudents = numStudents % numTeachers;
 
-      // Try to assign students to teachers
-      let teacherIndex = 0;
-      const unassignedStudents: Student[] = [];
+      console.log(`  📊 Distribution: ${numStudents} students / ${numTeachers} teachers = ~${baseClassSize} each`);
 
-      // First pass: Assign same-grade groups
-      sortedGrades.forEach(grade => {
-        const students = gradeGroups.get(grade)!;
+      // Sort students by grade to keep same grades together when possible
+      const sortedStudents = [...availableStudents].sort((a, b) => a.grade.localeCompare(b.grade));
 
-        while (students.length > 0) {
-          if (teacherIndex >= availableTeachers.length) {
-            unassignedStudents.push(...students);
-            break;
-          }
+      // Distribute students evenly across all teachers
+      let studentIndex = 0;
+      for (let i = 0; i < numTeachers && studentIndex < numStudents; i++) {
+        // Some teachers get one extra student to handle remainder
+        const classSize = baseClassSize + (i < extraStudents ? 1 : 0);
 
-          const classSize = Math.min(5, students.length);
-          const classStudents = students.splice(0, classSize);
+        if (classSize === 0) continue;
 
-          classes.push({
-            teacher: availableTeachers[teacherIndex].teacher,
-            students: classStudents,
-            shift: shift.label,
-            gradesMixed: [grade],
-            teacherStatus: availableTeachers[teacherIndex].status,
-          });
+        const classStudents = sortedStudents.slice(studentIndex, studentIndex + classSize);
+        studentIndex += classSize;
 
-          teacherIndex++;
-        }
-      });
+        // Determine grades in this class
+        const gradesInClass = [...new Set(classStudents.map(s => s.grade))].sort();
 
-      // Second pass: Try to assign remaining students by mixing grades (up to 3 levels)
-      while (unassignedStudents.length > 0 && teacherIndex < availableTeachers.length) {
-        const classStudents: Student[] = [];
-        const gradesInClass: string[] = [];
-
-        for (let i = unassignedStudents.length - 1; i >= 0 && classStudents.length < 5; i--) {
-          const student = unassignedStudents[i];
-          const testGrades = [...gradesInClass, student.grade];
-
-          if (canMixGrades(testGrades)) {
-            classStudents.push(student);
-            if (!gradesInClass.includes(student.grade)) {
-              gradesInClass.push(student.grade);
-            }
-            unassignedStudents.splice(i, 1);
-          }
-        }
-
-        if (classStudents.length > 0) {
-          classes.push({
-            teacher: availableTeachers[teacherIndex].teacher,
-            students: classStudents,
-            shift: shift.label,
-            gradesMixed: gradesInClass.sort(),
-            teacherStatus: availableTeachers[teacherIndex].status,
-          });
-          teacherIndex++;
-        } else {
-          break; // Can't assign any more students
-        }
+        classes.push({
+          teacher: availableTeachers[i].teacher,
+          students: classStudents,
+          shift: shift.label,
+          gradesMixed: gradesInClass,
+          teacherStatus: availableTeachers[i].status,
+        });
       }
 
       console.log(`  Classes created: ${classes.length}`);
