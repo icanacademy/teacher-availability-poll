@@ -584,6 +584,71 @@ app.get('/api/teachers-schedules', async (req, res) => {
   }
 });
 
+// DEBUG: GET /api/teachers-debug - Show all teachers with their raw status values
+app.get('/api/teachers-debug', async (req, res) => {
+  try {
+    const apiKey = process.env.NOTION_API_KEY;
+    const databaseId = process.env.NOTION_TEACHERS_DB_ID;
+
+    if (!apiKey || !databaseId) {
+      return res.status(500).json({ error: 'Missing credentials' });
+    }
+
+    const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({})
+    });
+
+    const data = await response.json();
+
+    const teachers = data.results.map((page) => {
+      const properties = page.properties;
+
+      // Get raw status value
+      let status = '';
+      let statusType = 'unknown';
+      const statusProp = properties['Status'];
+      if (statusProp) {
+        statusType = statusProp.type;
+        if (statusProp.select) {
+          status = statusProp.select?.name || '';
+        } else if (statusProp.rich_text && statusProp.rich_text.length > 0) {
+          status = statusProp.rich_text[0].plain_text || '';
+        } else if (statusProp.title && statusProp.title.length > 0) {
+          status = statusProp.title[0].plain_text || '';
+        }
+      }
+
+      return {
+        id: page.id,
+        name: properties['Full Name']?.title?.[0]?.plain_text || 'Unknown',
+        status: status,
+        statusType: statusType,
+        statusRaw: JSON.stringify(statusProp),
+        startTime: properties['Start Time']?.select?.name || '',
+        endTime: properties['End Time']?.select?.name || '',
+      };
+    });
+
+    // Find Edward specifically
+    const edward = teachers.filter(t => t.name.toLowerCase().includes('edward'));
+
+    res.json({
+      total: teachers.length,
+      edward: edward,
+      allStatuses: [...new Set(teachers.map(t => `"${t.status}" (${t.statusType})`))],
+      teachers: teachers.map(t => ({ name: t.name, status: t.status, statusType: t.statusType }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/students - Fetch ALL students with pagination support
 app.get('/api/students', async (req, res) => {
   try {
