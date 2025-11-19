@@ -335,4 +335,110 @@ const getCommuteAnalysis = async (userWeather: WeatherLocationData, officeWeathe
 }
 
 
-export { fetchWeatherForecast, analyzeImage, analyzeVideo, summarizeSubmissions, analyzeSituationWithMaps, getCommuteAnalysis };
+interface LessonPlanRequest {
+    grades: string[];
+    numStudents: number;
+    shiftDuration: string;
+    isOnline: boolean;
+    teacherName: string;
+}
+
+interface GeneratedLessonPlan {
+    title: string;
+    objective: string;
+    materials: string[];
+    warmUp: {
+        duration: string;
+        activity: string;
+    };
+    mainActivity: {
+        duration: string;
+        activity: string;
+        steps: string[];
+    };
+    practiceActivity: {
+        duration: string;
+        activity: string;
+    };
+    coolDown: {
+        duration: string;
+        activity: string;
+    };
+    adaptations: string[];
+    emergencyNotes: string;
+}
+
+const generateEmergencyLessonPlan = async (request: LessonPlanRequest): Promise<GeneratedLessonPlan> => {
+    const ai = getAI();
+
+    const gradeDescription = request.grades.length === 1
+        ? `Grade ${request.grades[0]}`
+        : `mixed grades: ${request.grades.join(', ')}`;
+
+    const deliveryMode = request.isOnline ? 'ONLINE (virtual classroom)' : 'IN-PERSON';
+
+    const prompt = `
+        You are an experienced ESL/English language teacher creating an EMERGENCY lesson plan for ${request.teacherName}'s class.
+
+        **Class Details:**
+        - Grade Levels: ${gradeDescription}
+        - Number of Students: ${request.numStudents}
+        - Duration: 2 hours (${request.shiftDuration})
+        - Delivery Mode: ${deliveryMode}
+
+        **Important Context:**
+        - This is an EMERGENCY class - the teacher may not have prepared materials
+        - Focus on engaging, practical activities that require MINIMAL preparation
+        - Materials should be commonly available (paper, pens, whiteboard, internet if online)
+        - Activities should work for the specific grade levels and mixed-age groups if applicable
+        - For online classes, suggest activities that work well in virtual settings
+
+        Create a complete, actionable lesson plan. Return ONLY valid JSON matching this structure:
+        {
+            "title": "Short engaging title for the lesson",
+            "objective": "Clear learning objective in one sentence",
+            "materials": ["List of 3-5 simple materials needed"],
+            "warmUp": {
+                "duration": "15 minutes",
+                "activity": "Engaging warm-up activity description"
+            },
+            "mainActivity": {
+                "duration": "50 minutes",
+                "activity": "Main activity name",
+                "steps": ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"]
+            },
+            "practiceActivity": {
+                "duration": "40 minutes",
+                "activity": "Practice/reinforcement activity description"
+            },
+            "coolDown": {
+                "duration": "15 minutes",
+                "activity": "Wrap-up activity and review"
+            },
+            "adaptations": ["How to adapt for younger students", "How to adapt for older students"],
+            "emergencyNotes": "Quick tips for the teacher if things don't go as planned"
+        }
+
+        Make the activities fun, educational, and appropriate for ESL learners. Focus on speaking, listening, reading, or writing skills.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: 'application/json'
+            }
+        });
+
+        const text = response.text.trim();
+        const lessonPlan = JSON.parse(text) as GeneratedLessonPlan;
+        return lessonPlan;
+    } catch (error) {
+        console.error("Error generating lesson plan with Gemini API:", error);
+        throw new Error("Failed to generate lesson plan.");
+    }
+};
+
+export { fetchWeatherForecast, analyzeImage, analyzeVideo, summarizeSubmissions, analyzeSituationWithMaps, getCommuteAnalysis, generateEmergencyLessonPlan };
+export type { LessonPlanRequest, GeneratedLessonPlan };

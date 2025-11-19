@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Teacher, PollSubmission } from '../types';
+import { generateEmergencyLessonPlan, type GeneratedLessonPlan } from '../services/geminiService';
 
 interface TeacherSchedule {
   id: string;
@@ -48,6 +49,11 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
   const [activeTab, setActiveTab] = useState<string>('8-10');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // AI Lesson Plan state - key is "shiftId-classIndex"
+  const [generatedPlans, setGeneratedPlans] = useState<Map<string, GeneratedLessonPlan>>(new Map());
+  const [generatingPlan, setGeneratingPlan] = useState<Set<string>>(new Set());
+  const [planErrors, setPlanErrors] = useState<Map<string, string>>(new Map());
 
   // Fetch teacher schedules and students from backend
   useEffect(() => {
@@ -468,6 +474,50 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
     setSelfStudyStudents(newSelfStudy);
   };
 
+  // Generate AI lesson plan for a specific class
+  const generateAILessonPlan = async (shiftId: string, classIndex: number, classItem: ClassAssignment) => {
+    const planKey = `${shiftId}-${classIndex}`;
+
+    // Set loading state
+    setGeneratingPlan(prev => new Set(prev).add(planKey));
+    setPlanErrors(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(planKey);
+      return newMap;
+    });
+
+    try {
+      const isOnline = classItem.teacherStatus.toUpperCase().includes('ONLINE');
+
+      const plan = await generateEmergencyLessonPlan({
+        grades: classItem.gradesMixed,
+        numStudents: classItem.students.length,
+        shiftDuration: classItem.shift,
+        isOnline,
+        teacherName: classItem.teacher.name,
+      });
+
+      setGeneratedPlans(prev => {
+        const newMap = new Map(prev);
+        newMap.set(planKey, plan);
+        return newMap;
+      });
+    } catch (err) {
+      console.error('Error generating lesson plan:', err);
+      setPlanErrors(prev => {
+        const newMap = new Map(prev);
+        newMap.set(planKey, err instanceof Error ? err.message : 'Failed to generate lesson plan');
+        return newMap;
+      });
+    } finally {
+      setGeneratingPlan(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(planKey);
+        return newSet;
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-8 text-center">
@@ -596,7 +646,13 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
 
               return (
                 <>
-                  {classes.map((classItem, index) => (
+                  {classes.map((classItem, index) => {
+                    const planKey = `${activeTab}-${index}`;
+                    const generatedPlan = generatedPlans.get(planKey);
+                    const isGenerating = generatingPlan.has(planKey);
+                    const planError = planErrors.get(planKey);
+
+                    return (
                     <div
                       key={index}
                       className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700"
@@ -641,8 +697,175 @@ export const LessonPlanMaker: React.FC<LessonPlanMakerProps> = ({ submissions, t
                           </div>
                         ))}
                       </div>
+
+                      {/* AI Lesson Plan Section */}
+                      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        {!generatedPlan && !isGenerating && (
+                          <button
+                            onClick={() => generateAILessonPlan(activeTab, index, classItem)}
+                            className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                          >
+                            <span>✨</span>
+                            Generate AI Lesson Plan
+                          </button>
+                        )}
+
+                        {isGenerating && (
+                          <div className="flex items-center justify-center gap-2 py-3 text-purple-600 dark:text-purple-400">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                            <span className="text-sm font-medium">Generating lesson plan...</span>
+                          </div>
+                        )}
+
+                        {planError && (
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-600 dark:text-red-400">
+                            {planError}
+                            <button
+                              onClick={() => generateAILessonPlan(activeTab, index, classItem)}
+                              className="ml-2 underline hover:no-underline"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        )}
+
+                        {generatedPlan && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                                <span>✨</span>
+                                AI-Generated Lesson Plan
+                              </h5>
+                              <button
+                                onClick={() => generateAILessonPlan(activeTab, index, classItem)}
+                                className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                              >
+                                Regenerate
+                              </button>
+                            </div>
+
+                            {/* Lesson Plan Title & Objective */}
+                            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
+                              <h6 className="font-semibold text-purple-900 dark:text-purple-100">
+                                {generatedPlan.title}
+                              </h6>
+                              <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                                <strong>Objective:</strong> {generatedPlan.objective}
+                              </p>
+                            </div>
+
+                            {/* Materials */}
+                            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3">
+                              <h6 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                📦 Materials Needed
+                              </h6>
+                              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                                {generatedPlan.materials.map((material, i) => (
+                                  <li key={i} className="flex items-start gap-2">
+                                    <span className="text-slate-400">•</span>
+                                    {material}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            {/* Activities Timeline */}
+                            <div className="space-y-3">
+                              {/* Warm Up */}
+                              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h6 className="text-sm font-semibold text-green-700 dark:text-green-300">
+                                    🌅 Warm Up
+                                  </h6>
+                                  <span className="text-xs text-green-600 dark:text-green-400">
+                                    {generatedPlan.warmUp.duration}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-green-800 dark:text-green-200">
+                                  {generatedPlan.warmUp.activity}
+                                </p>
+                              </div>
+
+                              {/* Main Activity */}
+                              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h6 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                                    📚 Main Activity: {generatedPlan.mainActivity.activity}
+                                  </h6>
+                                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                                    {generatedPlan.mainActivity.duration}
+                                  </span>
+                                </div>
+                                <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-decimal">
+                                  {generatedPlan.mainActivity.steps.map((step, i) => (
+                                    <li key={i}>{step}</li>
+                                  ))}
+                                </ol>
+                              </div>
+
+                              {/* Practice Activity */}
+                              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h6 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
+                                    ✏️ Practice
+                                  </h6>
+                                  <span className="text-xs text-yellow-600 dark:text-yellow-400">
+                                    {generatedPlan.practiceActivity.duration}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                  {generatedPlan.practiceActivity.activity}
+                                </p>
+                              </div>
+
+                              {/* Cool Down */}
+                              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h6 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                                    🌙 Cool Down
+                                  </h6>
+                                  <span className="text-xs text-indigo-600 dark:text-indigo-400">
+                                    {generatedPlan.coolDown.duration}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-indigo-800 dark:text-indigo-200">
+                                  {generatedPlan.coolDown.activity}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Adaptations */}
+                            {generatedPlan.adaptations.length > 0 && (
+                              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3">
+                                <h6 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                  🔄 Adaptations
+                                </h6>
+                                <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                                  {generatedPlan.adaptations.map((adaptation, i) => (
+                                    <li key={i} className="flex items-start gap-2">
+                                      <span className="text-slate-400">•</span>
+                                      {adaptation}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Emergency Notes */}
+                            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                              <h6 className="text-sm font-semibold text-red-700 dark:text-red-300 mb-1">
+                                ⚠️ Emergency Notes
+                              </h6>
+                              <p className="text-sm text-red-800 dark:text-red-200">
+                                {generatedPlan.emergencyNotes}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                  );
+                  })}
 
                   {/* Self Study Section - Students without teachers */}
                   {selfStudy.length > 0 && (
