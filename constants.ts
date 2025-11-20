@@ -49,7 +49,7 @@ export const POLL_OPTIONS: PollOption[] = [
 
 export const REASON_OPTIONS = [
     // Available - No issues
-    'I CAN Come',
+    'Can have class',
 
     // Leave & Appointments
     'Official Leave',
